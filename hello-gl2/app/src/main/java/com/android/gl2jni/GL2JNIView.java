@@ -336,4 +336,6 @@ class GL2JNIView extends GLSurfaceView {
             // Do nothing.
         }
     }
+
+
 }
