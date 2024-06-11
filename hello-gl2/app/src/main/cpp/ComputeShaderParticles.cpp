@@ -13,16 +13,19 @@
 #include <stdlib.h>
 
 const auto gVertexShader = R"glsl(
-    attribute vec4 vPosition;
+  #version 320 es
+    in vec4 vPosition;
     void main() {
       gl_Position = vPosition;
     }
 )glsl";
 
 const auto gFragmentShader = R"glsl(
+  #version 320 es
     precision mediump float;
+    out vec4 outColor;
     void main() {
-      gl_FragColor = vec4(0.0, 1.0, 0.0, 1.0);
+      outColor = vec4(0.0, 1.0, 0.0, 1.0);
     }
 )glsl";
 
