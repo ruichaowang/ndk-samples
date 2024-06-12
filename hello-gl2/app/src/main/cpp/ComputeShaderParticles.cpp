@@ -55,7 +55,7 @@ void main() {
   int x = int(uv.x * 1024.0);
   int y = int(uv.y * 1024.0);
   int count = particles_count[x][y];
-  float v =  float(count) / 15.0;
+  float v =  float(count) / 5.0;
   particles_count[x][y] = 0;
   outColor = vec4(v * 0.3 + 0.0, v * 0.5 + 0.0, v * 0.5 + 0.0, 1.0);  //填充颜色,参数按照固定值去设定
 }
@@ -155,7 +155,7 @@ void main() {
 	// 力的大小
 	float vibration = chladni_equation(ivec2(int(v.x), int(v.y)));
 	// 求出加速度
-	float c = (timeSinceLastFrame * (vibration * 60.0 * 20.0)) / mass;
+	float c = (timeSinceLastFrame * (vibration * 25.0 * 20.0)) / mass;
 	// 更新下一帧速度
 	v.z += c * float(gradient.x);
 	v.w += c * float(gradient.y);
@@ -172,7 +172,7 @@ void main() {
 	}
 
         if ((x < 3.0 || x > w - 3.0) || (y < 3.0 || y > h - 3.0)) {
-            if (rand(vec2(x, y)) < 0.1) {
+            if (rand(vec2(x, y)) < 0.01) {
                 float x_amend = rand(vec2(x + 0.1, y + 0.2)) * w;
                 float y_amend = rand(vec2(x + 0.3, y + 0.4)) * h;
                 v.x = x_amend;
@@ -181,7 +181,7 @@ void main() {
         }
 
         int count = atomicAdd(particles_count[int(v.x)][int(v.y)], 1);
-//        particles_count[int(v.x)][int(v.y)] = count;
+
         float drag1 = 0.8;
         float drag2 = 0.0001 * float(v.z*v.z + v.w*v.w);
         float drag3 = 0.3 * float(count);
@@ -204,8 +204,6 @@ void main() {
         particles_position_y[id.x][id.y] = v.y;
         particles_velocity_x[id.x][id.y] = v.z;
         particles_velocity_y[id.x][id.y] = v.w;
-
-//        particles_count[int(v.x)][int(v.y)] = int(vibration * 15.0);
 }
 )glsl";
 
@@ -289,10 +287,7 @@ GLuint ComputeShaderParticles::createProgram(const char *pVertexSource,
 }
 void ComputeShaderParticles::renderFrame() {
   static float grey;
-  grey += 0.01f;
-  if (grey > 1.0f) {
-    grey = 0.0f;
-  }
+  grey = 0.1f;
   glClearColor(grey, grey, grey, 1.0f);
   checkGlError("glClearColor");
   glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
@@ -363,6 +358,8 @@ bool ComputeShaderParticles::setupGraphics(int w, int h) {
   printGLString("Extensions", GL_EXTENSIONS);
 
   LOGI("setupGraphics(%d, %d)", w, h);  // （1886, 1440)
+  w = 1024;
+  h = 1024;
   window_width = w;
   window_height = h;
 
