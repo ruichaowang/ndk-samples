@@ -14,16 +14,24 @@
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
 class ComputeShaderParticles {
+
+  static constexpr int PARTICLES_COUNT_X = 256;   // shader 中要和这个一致
+  static constexpr int PARTICLES_COUNT_Y = 256;
+  static constexpr int DISPLAY_X = 1024;
+  static constexpr int DISPLAY_Y = 1024;
+  static constexpr float massMin = 0.75;
+  static constexpr float massMax = 1.25;
+
   struct ParticlesBuffer {
-    float particles_position_x[1024][1024];
-    float particles_position_y[1024][1024];
-    float particles_velocity_x[1024][1024];
-    float particles_velocity_y[1024][1024];
-    float particles_mass[1024][1024];
+    float particles_position_x[PARTICLES_COUNT_X][PARTICLES_COUNT_Y];
+    float particles_position_y[PARTICLES_COUNT_X][PARTICLES_COUNT_Y];
+    float particles_velocity_x[PARTICLES_COUNT_X][PARTICLES_COUNT_Y];
+    float particles_velocity_y[PARTICLES_COUNT_X][PARTICLES_COUNT_Y];
+    float particles_mass[PARTICLES_COUNT_X][PARTICLES_COUNT_Y];
   };
 
   struct ParticlesDisplayBuffer {
-    int particles_count[1024][1024];                           // 每一个点的粒子数
+    int particles_count[DISPLAY_X][DISPLAY_Y]; // 真正用来显示的每一个点的粒子数，这个是图像的分辨率
   };
 
  public:

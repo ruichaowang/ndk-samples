@@ -15,9 +15,8 @@
 
 #include <iostream>
 
-#include "config.h"
-
-static Config config;
+//#include "config.h"
+//static Config config;
 
 static double getCurrentTime() {
   struct timespec now;
@@ -37,17 +36,21 @@ void main() {
 )glsl";
 
 const auto fragmentShaderCode = R"glsl(
+
 #version 320 es
 precision mediump float;
 in vec2 uv;
 out vec4 outColor;
 
+#define PARTICLES_COUNT_X 256
+#define PARTICLES_COUNT_Y 256
+
 layout(std430, binding = 0) buffer SSBO_particles {
-  float particles_position_x[1024][1024];
-  float particles_position_y[1024][1024];
-  float particles_velocity_x[1024][1024];
-  float particles_velocity_y[1024][1024];
-  float particles_mass[1024][1024];
+  float particles_position_x[PARTICLES_COUNT_X][PARTICLES_COUNT_Y];
+  float particles_position_y[PARTICLES_COUNT_X][PARTICLES_COUNT_Y];
+  float particles_velocity_x[PARTICLES_COUNT_X][PARTICLES_COUNT_Y];
+  float particles_velocity_y[PARTICLES_COUNT_X][PARTICLES_COUNT_Y];
+  float particles_mass[PARTICLES_COUNT_X][PARTICLES_COUNT_Y];
 };
 
 layout(std430, binding = 1) buffer SSBO_display {
@@ -58,7 +61,7 @@ void main() {
   int x = int(uv.x * 1024.0);
   int y = int(uv.y * 1024.0);
   int count = particles_count[x][y];
-  float v =  float(count) / 5.0;
+  float v =  float(count) / 1.0;
   particles_count[x][y] = 0;
   outColor = vec4(v * 0.3 + 0.0, v * 0.5 + 0.0, v * 0.5 + 0.0, 1.0);  //填充颜色,参数按照固定值去设定
 }
@@ -68,15 +71,17 @@ static auto updateParticlesComputeShaderCode = R"glsl(
 #version 320 es
 precision highp float;
 precision highp int;
+#define PARTICLES_COUNT_X 256
+#define PARTICLES_COUNT_Y 256
 
 layout(local_size_x = 16, local_size_y = 16) in;
 
 layout(std430, binding = 0) buffer SSBO_particles {
-  float particles_position_x[1024][1024];
-  float particles_position_y[1024][1024];
-  float particles_velocity_x[1024][1024];
-  float particles_velocity_y[1024][1024];
-  float particles_mass[1024][1024];
+  float particles_position_x[PARTICLES_COUNT_X][PARTICLES_COUNT_Y];
+  float particles_position_y[PARTICLES_COUNT_X][PARTICLES_COUNT_Y];
+  float particles_velocity_x[PARTICLES_COUNT_X][PARTICLES_COUNT_Y];
+  float particles_velocity_y[PARTICLES_COUNT_X][PARTICLES_COUNT_Y];
+  float particles_mass[PARTICLES_COUNT_X][PARTICLES_COUNT_Y];
 };
 
 layout(std430, binding = 1) buffer SSBO_display {
@@ -324,7 +329,7 @@ void ComputeShaderParticles::renderFrame() {
   glUniform1f(glGetUniformLocation(updateParticlesProgramID, "m"), m);
   glUniform1f(glGetUniformLocation(updateParticlesProgramID, "n"), n);
 
-  glDispatchCompute(config.particleCountX / 16, config.particleCountY / 16, 1);
+  glDispatchCompute(PARTICLES_COUNT_X / 16, PARTICLES_COUNT_Y / 16, 1);
   checkGlError("Update the particles");
 
   glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
@@ -465,12 +470,11 @@ void ComputeShaderParticles::initSSBOParticlesData() {
     return;
   }
 
-  for (auto i = 0; i < 1024; ++i) {
-    for (auto j = 0; j < 1024; ++j) {
-      auto pos_w = config.width * (rand() / float(RAND_MAX));
-      auto pos_h = config.height * (rand() / float(RAND_MAX));
-      auto mass = config.massMin + (config.massMax - config.massMin) *
-                                       (float(rand()) / RAND_MAX);
+  for (auto i = 0; i < PARTICLES_COUNT_Y; ++i) {
+    for (auto j = 0; j < PARTICLES_COUNT_X; ++j) {
+      auto pos_w = DISPLAY_X * (rand() / float(RAND_MAX));
+      auto pos_h = DISPLAY_Y * (rand() / float(RAND_MAX));
+      auto mass = massMin + (massMax - massMin) * (float(rand()) / RAND_MAX);
       ssbo_particles_buffer->particles_position_x[i][j] = pos_w;
       ssbo_particles_buffer->particles_position_y[i][j] = pos_h;
       ssbo_particles_buffer->particles_velocity_x[i][j] = 0.0;
@@ -518,8 +522,8 @@ void ComputeShaderParticles::initSSBODisplayData() {
     return;
   }
 
-  for (auto i = 0; i < 1024; ++i) {
-    for (auto j = 0; j < 1024; ++j) {
+  for (auto i = 0; i < PARTICLES_COUNT_Y; ++i) {
+    for (auto j = 0; j < PARTICLES_COUNT_X; ++j) {
       ssbo_display_buffer->particles_count[i][j] = 0;
     }
   }

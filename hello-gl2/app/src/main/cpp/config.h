@@ -15,8 +15,8 @@ struct Config
 
 	// number of particles = countX * countY
 	// Both must be multiples of 16
-	int particleCountX = 1024;
-	int particleCountY = 1024;
+	int particleCountX = 512; // 原先为 1024
+	int particleCountY = 512;
 
 	float forceMultiplier = 30000.0;
 
