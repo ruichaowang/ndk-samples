@@ -1,6 +1,6 @@
 //
 // Created by 王锐超 on 2024/6/11.
-// 当前所有image read/load 不支持 rgba32f
+// 使用计算着色器实现粒子的物理效果
 //
 
 #ifndef NDK_SAMPLES_COMPUTESHADERPARTICLES_H
@@ -20,6 +20,9 @@ class ComputeShaderParticles {
     float particles_velocity_x[1024][1024];
     float particles_velocity_y[1024][1024];
     float particles_mass[1024][1024];
+  };
+
+  struct ParticlesDisplayBuffer {
     int particles_count[1024][1024];                           // 每一个点的粒子数
   };
 
@@ -32,12 +35,12 @@ class ComputeShaderParticles {
  private:
   static void checkGlError(const char* op);
   static void printGLString(const char* name, GLenum s);
-  static std::string formatShaderCode(std::string shaderCode);
   GLuint loadShader(GLenum shaderType, const char* pSource);
   GLuint createProgram(const char* pVertexSource, const char* pFragmentSource);
   GLuint createComputeShaderProgram(const char* pComputeSource);
   void createSSBO();
-  void initParticleProperties();
+  void initSSBOParticlesData();
+  void initSSBODisplayData();
   void releaseSSBO();
   void genVertexBuffers();
 
@@ -46,6 +49,7 @@ class ComputeShaderParticles {
   GLuint renderProgramID;                        // Create the gl render program
   GLuint updateParticlesProgramID;                    // compute shader program
   GLuint ssbo_particles_ = 0;
+  GLuint ssbo_display_ = 0;
   std::atomic <bool> isSSBOReady = false;
   GLuint vertArray;   //这个最后没有清理
   GLuint posBuf;     //这个还没有清理

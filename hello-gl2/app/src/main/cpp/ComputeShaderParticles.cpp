@@ -48,6 +48,9 @@ layout(std430, binding = 0) buffer SSBO_particles {
   float particles_velocity_x[1024][1024];
   float particles_velocity_y[1024][1024];
   float particles_mass[1024][1024];
+};
+
+layout(std430, binding = 1) buffer SSBO_display {
   int particles_count[1024][1024];
 };
 
@@ -74,7 +77,9 @@ layout(std430, binding = 0) buffer SSBO_particles {
   float particles_velocity_x[1024][1024];
   float particles_velocity_y[1024][1024];
   float particles_mass[1024][1024];
+};
 
+layout(std430, binding = 1) buffer SSBO_display {
   int particles_count[1024][1024];
 };
 
@@ -289,10 +294,6 @@ GLuint ComputeShaderParticles::createProgram(const char *pVertexSource,
   return program;
 }
 void ComputeShaderParticles::renderFrame() {
-  static float grey;
-  grey = 0.1f;
-  glClearColor(grey, grey, grey, 1.0f);
-  checkGlError("glClearColor");
   glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
   checkGlError("glClear");
 
@@ -309,27 +310,20 @@ void ComputeShaderParticles::renderFrame() {
     n = (rand() / float(RAND_MAX)) * 10.0;
     printf("m: %f, n: %f\n", m, n);
   }
-  //  LOGI("timeSinceLastFrame: %f", timeSinceLastFrame);
 
   // Update the particles compute shader program
   glUseProgram(updateParticlesProgramID);
   checkGlError("gl use update Particles Program ");
   glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssbo_particles_);
-  int bufMask = GL_MAP_WRITE_BIT | GL_MAP_READ_BIT;
-  ParticlesBuffer *ssbo_particles_buffer =
-      static_cast<ParticlesBuffer *>(glMapBufferRange(
-          GL_SHADER_STORAGE_BUFFER, 0, sizeof(ParticlesBuffer), bufMask));
-  if (!ssbo_particles_buffer) {
-    checkGlError("gl Map Buffer Range");
-    LOGE("Could not map the SSBO buffer");
-    return;
-  }
+  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, ssbo_display_);
+  checkGlError("bind bufferbase");
 
   glUniform1f(
       glGetUniformLocation(updateParticlesProgramID, "timeSinceLastFrame"),
       timeSinceLastFrame);
   glUniform1f(glGetUniformLocation(updateParticlesProgramID, "m"), m);
   glUniform1f(glGetUniformLocation(updateParticlesProgramID, "n"), n);
+
   glDispatchCompute(config.particleCountX / 16, config.particleCountY / 16, 1);
   checkGlError("Update the particles");
 
@@ -337,19 +331,16 @@ void ComputeShaderParticles::renderFrame() {
   GLsync Comp_sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
   auto _sync_result = glClientWaitSync(Comp_sync, 0, GL_TIMEOUT_IGNORED);
 
-
   // shader program，尝试直接读取以及绘制
   glUseProgram(renderProgramID);
   glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-
 
   // 结束的逻辑
   GLsync Reset_sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
   glWaitSync(Reset_sync, 0, GL_TIMEOUT_IGNORED);
   glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-  glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
   glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, 0);
-  glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, 0);
   glUseProgram(0);
   glDeleteSync(Comp_sync);
   glDeleteSync(Reset_sync);
@@ -380,24 +371,16 @@ bool ComputeShaderParticles::setupGraphics(int w, int h) {
   }
 
   createSSBO();
+  initSSBOParticlesData();
+  initSSBODisplayData();
+  isSSBOReady = true;
+
   genVertexBuffers();
 
   glViewport(0, 0, w, h);
   checkGlError("glViewport");
 
   return true;
-}
-std::string ComputeShaderParticles::formatShaderCode(std::string shaderCode) {
-  for (auto v : config.values) {
-    std::string name = v.first;
-    std::string s = "${" + name + "}";
-    for (;;) {
-      auto i = shaderCode.find(s);
-      if (i == std::string::npos) break;
-      shaderCode.replace(i, s.size(), config.getValue(name));
-    }
-  }
-  return shaderCode;
 }
 GLuint ComputeShaderParticles::createComputeShaderProgram(
     const char *pComputeSource) {
@@ -447,16 +430,23 @@ void ComputeShaderParticles::createSSBO() {
   glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(ParticlesBuffer), nullptr,
                GL_DYNAMIC_COPY);
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-  checkGlError("init SSBO");
+  checkGlError("init SSBO for particles");
 
-  initParticleProperties();
+  glGenBuffers(1, &ssbo_display_);
+  glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_display_);
+  glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(ParticlesDisplayBuffer), nullptr,
+               GL_DYNAMIC_COPY);
+  glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+  checkGlError("init SSBO for display");
 }
 void ComputeShaderParticles::releaseSSBO() {
   glDeleteBuffers(1, &ssbo_particles_);
   ssbo_particles_ = 0;
+  glDeleteBuffers(1, &ssbo_display_);
+  ssbo_display_ = 0;
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 }
-void ComputeShaderParticles::initParticleProperties() {
+void ComputeShaderParticles::initSSBOParticlesData() {
   LOGI("init particles properties");
   if (ssbo_particles_ == 0) {
     LOGE("particles SSBO not init");
@@ -464,6 +454,7 @@ void ComputeShaderParticles::initParticleProperties() {
   }
 
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_particles_);
+//  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssbo_particles_);
   int bufMask = GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT;
   ParticlesBuffer *ssbo_particles_buffer =
       static_cast<ParticlesBuffer *>(glMapBufferRange(
@@ -485,20 +476,15 @@ void ComputeShaderParticles::initParticleProperties() {
       ssbo_particles_buffer->particles_velocity_x[i][j] = 0.0;
       ssbo_particles_buffer->particles_velocity_y[i][j] = 0.0;
       ssbo_particles_buffer->particles_mass[i][j] = mass;
-      ssbo_particles_buffer->particles_count[i][j] = 0;
-
-      // 为了测试绘制，直接在这里模拟一个分布并送入,这部分省略
-      //      auto count = static_cast<int>(15.0 * (rand() / float(RAND_MAX)));
-      //      ssbo_particles_buffer->particles_count[i][j] = count;
     }
   }
 
   glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
   glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+//  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, 0);
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
   checkGlError("init particle SSBO");
 
-  isSSBOReady = true;
   LOGI("init particles properties done");
 }
 void ComputeShaderParticles::genVertexBuffers() {
@@ -512,4 +498,37 @@ void ComputeShaderParticles::genVertexBuffers() {
   GLint posPtr = glGetAttribLocation(renderProgramID, "pos");
   glVertexAttribPointer(posPtr, 2, GL_FLOAT, GL_FALSE, 0, 0);
   glEnableVertexAttribArray(posPtr);
+}
+void ComputeShaderParticles::initSSBODisplayData() {
+  LOGI("init display data ");
+  if (ssbo_display_ == 0) {
+    LOGE("ssbo display not init");
+    return;
+  }
+
+  glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_display_);
+//  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, ssbo_display_);
+  int bufMask = GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT;
+  ParticlesDisplayBuffer *ssbo_display_buffer =
+      static_cast<ParticlesDisplayBuffer *>(glMapBufferRange(
+          GL_SHADER_STORAGE_BUFFER, 0, sizeof(ParticlesDisplayBuffer), bufMask));
+  checkGlError("gl Map display Buffer Range");
+  if (!ssbo_display_buffer) {
+    LOGE("Could not map the SSBO buffer");
+    return;
+  }
+
+  for (auto i = 0; i < 1024; ++i) {
+    for (auto j = 0; j < 1024; ++j) {
+      ssbo_display_buffer->particles_count[i][j] = 0;
+    }
+  }
+
+  glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+  glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+  glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+//  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, 0);
+  checkGlError("init display SSBO");
+
+  LOGI("init ssbo for display done");
 }
