@@ -58,23 +58,6 @@ void main() {
 }
 )glsl";
 
-// 这个shader 可以去掉，已经被省略
-const auto renderTextureComputeShaderCode = R"glsl(
-#version 320 es
-
-precision highp float;
-precision highp uimage2D;
-layout(binding = 0, rgba32f) writeonly uniform image2D outputTexture;
-layout(binding = 1, r32ui) uniform uimage2D particleCountTexture;
-layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
-void main() {
-    ivec2 pos = ivec2(gl_GlobalInvocationID.xy);
-    uint count = imageAtomicExchange(particleCountTexture, pos, uint(0));
-    float v = float(count) / 15.0;
-    imageStore(outputTexture, pos, vec4(v * 1.0 + 0.0, v * 1.0 + 0.0, v * 1.0 + 0.0, 1.0));
-}
-)glsl";
-
 static auto updateParticlesComputeShaderCode = R"glsl(
 #version 320 es
 precision highp float;
@@ -369,13 +352,6 @@ bool ComputeShaderParticles::setupGraphics(int w, int h) {
   renderProgramID = createProgram(vertexShaderCode, fragmentShaderCode);
   if (!renderProgramID) {
     LOGE("Could not create render program.");
-    return false;
-  }
-
-  renderTexureProgramID =
-      createComputeShaderProgram(renderTextureComputeShaderCode);
-  if (!renderTexureProgramID) {
-    LOGE("Could not create Texture Program.");
     return false;
   }
 

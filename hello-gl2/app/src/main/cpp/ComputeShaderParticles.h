@@ -8,9 +8,7 @@
 
 #include <GLES3/gl32.h>
 #include <android/log.h>
-
 #include <iostream>
-
 #define LOG_TAG "Test_CS_Particles_"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
@@ -22,9 +20,8 @@ class ComputeShaderParticles {
     float particles_velocity_x[1024][1024];
     float particles_velocity_y[1024][1024];
     float particles_mass[1024][1024];
-    int particles_count[1024][1024];           // 每一个点的粒子数
+    int particles_count[1024][1024];                           // 每一个点的粒子数
   };
-
 
  public:
   ComputeShaderParticles();
@@ -47,21 +44,11 @@ class ComputeShaderParticles {
 
   int window_width;
   int window_height;
-  GLuint textureID;  // main texture, 计划是后面2个数据直接保存到 SSBO
-  GLuint particleCountTextureID;  // integer texture, where every pixel's value
-                                  // is the number of particles that should be
-                                  // positioned on the corresponding pixel on
-                                  // the main texture/screen
-  GLuint particlePositionTextureID;  // Create a texture in which the particle
-                                     // coordinates will be stored
-  GLuint particleMassTextureID;      // Create a texture in which the particle
-                                     // masses will be stored
-  GLuint renderProgramID;            // Create the render program
-  GLuint renderTexureProgramID;      // Compute shader program
-  GLuint updateParticlesProgramID;
+  GLuint renderProgramID;                        // Create the gl render program
+  GLuint updateParticlesProgramID;                    // compute shader program
   GLuint ssbo_particles_ = 0;
   std::atomic <bool> isSSBOReady = false;
-  GLuint vertArray;   //这个还没有清理
+  GLuint vertArray;   //这个最后没有清理
   GLuint posBuf;     //这个还没有清理
   double lastFrameTime = 0.0;
   double fpsCountLastTime = 0.0;
