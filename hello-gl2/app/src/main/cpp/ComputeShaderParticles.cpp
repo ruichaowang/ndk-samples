@@ -74,6 +74,7 @@ layout(std430, binding = 0) buffer SSBO_particles {
   float particles_velocity_x[1024][1024];
   float particles_velocity_y[1024][1024];
   float particles_mass[1024][1024];
+
   int particles_count[1024][1024];
 };
 
@@ -162,25 +163,26 @@ void main() {
 
         float x = v.x;
 	float y = v.y;
+        float rand = sin(float(particles_count[int(v.x)][int(v.y)]));
 	if ((x - y < 3.0 && x - y > -3.0) || (x + y < w + 3.0 && x + y > w - 3.0)) {
 		if (rand(vec2(x, y)) < 0.2) {
-			float x_amend = rand(vec2(x + 0.1, y + 0.2)) * w;
-			float y_amend = rand(vec2(x + 0.3, y + 0.4)) * h;
-			v.x = x_amend;
-			v.y = y_amend;
+                float x_amend = rand(vec2(0.1 + timeSinceLastFrame, y + rand + timeSinceLastFrame)) * w;
+                float y_amend = rand(vec2(x + rand + timeSinceLastFrame, 0.4 + timeSinceLastFrame)) * h;
+                v.x = x_amend;
+                v.y = y_amend;
 		}
 	}
 
         if ((x < 3.0 || x > w - 3.0) || (y < 3.0 || y > h - 3.0)) {
-            if (rand(vec2(x, y)) < 0.01) {
-                float x_amend = rand(vec2(x + 0.1, y + 0.2)) * w;
-                float y_amend = rand(vec2(x + 0.3, y + 0.4)) * h;
+            if (rand(vec2(x, y)) < 0.1) {
+                float x_amend = rand(vec2(0.1 + timeSinceLastFrame, y + rand + timeSinceLastFrame)) * w;
+                float y_amend = rand(vec2(x + rand + timeSinceLastFrame, 0.4 + timeSinceLastFrame)) * h;
                 v.x = x_amend;
                 v.y = y_amend;
             }
         }
 
-        int count = atomicAdd(particles_count[int(v.x)][int(v.y)], 1);
+        int count = particles_count[int(v.x)][int(v.y)];
 
         float drag1 = 0.8;
         float drag2 = 0.0001 * float(v.z*v.z + v.w*v.w);
@@ -204,6 +206,7 @@ void main() {
         particles_position_y[id.x][id.y] = v.y;
         particles_velocity_x[id.x][id.y] = v.z;
         particles_velocity_y[id.x][id.y] = v.w;
+        atomicAdd(particles_count[int(v.x)][int(v.y)], 1);
 }
 )glsl";
 
