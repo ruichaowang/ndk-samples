@@ -40,7 +40,7 @@ const auto fragmentShaderCode = R"glsl(
 #version 320 es
 precision mediump float;
 in vec2 uv;
-out vec3 color;
+out vec4 outColor;
 
 layout(std430, binding = 0) buffer SSBO_particles {
   float particles_position_x[1024][1024];
@@ -57,8 +57,7 @@ void main() {
   int count = particles_count[x][y];
   float v =  float(count) / 15.0;
   particles_count[x][y] = 0;
-  color = vec3(v * 1.0 + 0.0, v * 1.0 + 0.0, v * 1.0 + 0.0);  //填充颜色,参数按照固定值去设定
-
+  outColor = vec4(v * 0.3 + 0.0, v * 0.5 + 0.0, v * 0.5 + 0.0, 1.0);  //填充颜色,参数按照固定值去设定
 }
 )glsl";
 
@@ -337,13 +336,14 @@ void ComputeShaderParticles::renderFrame() {
   checkGlError("Update the particles");
 
   glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+  GLsync Comp_sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+  auto _sync_result = glClientWaitSync(Comp_sync, 0, GL_TIMEOUT_IGNORED);
+
 
   // shader program，尝试直接读取以及绘制
   glUseProgram(renderProgramID);
   glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
-  GLsync Comp_sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
-  auto _sync_result = glClientWaitSync(Comp_sync, 0, GL_TIMEOUT_IGNORED);
 
   // 结束的逻辑
   GLsync Reset_sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
