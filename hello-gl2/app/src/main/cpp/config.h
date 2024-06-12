@@ -10,7 +10,7 @@
 
 struct Config
 {
-	int width = 768, height = 768;
+	int width = 1024, height = 1024;
 	bool enableVSync = true;
 
 	// number of particles = countX * countY

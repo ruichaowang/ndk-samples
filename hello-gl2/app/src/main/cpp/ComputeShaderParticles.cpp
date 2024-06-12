@@ -11,10 +11,17 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
-
+#include <time.h>
+#include <iostream>
 #include "config.h"
 
 static Config config;
+
+static double getCurrentTime() {
+  struct timespec now;
+  clock_gettime(CLOCK_MONOTONIC, &now);
+  return now.tv_sec + now.tv_nsec / 1000000000.0;
+}
 
 const auto vertexShaderCode = R"glsl(
 #version 320 es
@@ -61,11 +68,16 @@ precision highp int;
 precision highp uimage2D;
 
 layout(binding = 1, r32ui) uniform coherent uimage2D particleCountTexture;
-layout(binding = 2, r32f) uniform image2D particlePositionTexture_x;
-layout(binding = 3, r32f) uniform image2D particlePositionTexture_y;
-layout(binding = 4, r32f) uniform image2D particleMassTexture;
 layout(local_size_x = 16, local_size_y = 16) in;
-uniform float forceMultiplier;
+
+layout(std430, binding = 0) buffer SSBO_particles {
+  float particles_position_x[1024][1024];
+  float particles_position_y[1024][1024];
+  float particles_velocity_x[1024][1024];
+  float particles_velocity_y[1024][1024];
+  float particles_mass[1024][1024];
+};
+
 uniform float timeSinceLastFrame;
 uniform float m;
 uniform float n;
@@ -128,11 +140,11 @@ ivec2 genGradients(ivec2 id) {
 void main() {
 	ivec2 id = ivec2(gl_GlobalInvocationID.xy);
         vec4 v;
-        float pos_x = imageLoad(particlePositionTexture_x, id).r;
-        float pos_y = imageLoad(particlePositionTexture_y, id).r;
-	float mass = imageLoad(particleMassTexture, id).r;
-        v.x = pos_x;
-        v.y = pos_y;
+        v.x = particles_position_x[id.x][id.y];
+        v.y = particles_position_y[id.x][id.y];
+        v.z = particles_velocity_x[id.x][id.y];
+        v.w = particles_velocity_y[id.x][id.y];
+        float mass = particles_mass[id.x][id.y];
 
 	// 更新位置
 	v.x += v.z * timeSinceLastFrame;
@@ -170,7 +182,11 @@ void main() {
         else if (v.w < -drag) v.w += drag;
         else v.w = 0.0;
 
-        imageStore(particlePositionTexture_x, id, vec4(v.x, 0.0, 0.0, 0.0));   //这样存储的话，只有x的值, rgba 受限，不能直接读取，如果用 ssbo，之后怎么绘制呢？
+        // 保存结果到 SSBO
+        particles_position_x[id.x][id.y] = v.x;
+        particles_position_y[id.x][id.y] = v.y;
+        particles_velocity_x[id.x][id.y] = v.z;
+        particles_velocity_y[id.x][id.y] = v.w;
 }
 )glsl";
 
@@ -178,7 +194,9 @@ const GLfloat gTriangleVertices[] = {0.0f, 0.5f, -0.5f, -0.5f, 0.5f, -0.5f};
 
 ComputeShaderParticles::ComputeShaderParticles() {}
 
-ComputeShaderParticles::~ComputeShaderParticles() {}
+ComputeShaderParticles::~ComputeShaderParticles() {
+  releaseSSBO();
+}
 
 void ComputeShaderParticles::checkGlError(const char *op) {
   for (GLint error = glGetError(); error; error = glGetError()) {
@@ -262,6 +280,32 @@ void ComputeShaderParticles::renderFrame() {
   checkGlError("glClearColor");
   glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
   checkGlError("glClear");
+
+  double currentTime =  getCurrentTime();
+  double timeSinceLastFrame = currentTime - lastFrameTime;
+  lastFrameTime += timeSinceLastFrame;
+  if (currentTime - lastUpdateTime > 1.0) {
+    lastUpdateTime = currentTime;
+    m = (rand() / float(RAND_MAX)) * 10.0;
+    n = (rand() / float(RAND_MAX)) * 10.0;
+    printf("m: %f, n: %f\n", m, n);
+  }
+
+  // Update the particles compute shader program
+  glUseProgram(updateParticlesProgramID);
+  checkGlError("gl use update Particles Program ");
+
+
+
+  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssbo_particles_);
+
+  glUniform1i(glGetUniformLocation(updateParticlesProgramID, "particleCountTexture"), 1);
+  glUniform1f(glGetUniformLocation(updateParticlesProgramID, "timeSinceLastFrame"), timeSinceLastFrame);
+  glUniform1f(glGetUniformLocation(updateParticlesProgramID, "m"), m);
+  glUniform1f(glGetUniformLocation(updateParticlesProgramID, "n"), n);
+  glDispatchCompute(config.particleCountX / 16, config.particleCountY / 16, 1);
+  checkGlError("Update the particles");
+
 }
 bool ComputeShaderParticles::setupGraphics(int w, int h) {
   printGLString("Version", GL_VERSION);
@@ -273,7 +317,6 @@ bool ComputeShaderParticles::setupGraphics(int w, int h) {
   window_width = w;
   window_height = h;
 
-  CreateAllTextures();
   renderProgramID = createProgram(vertexShaderCode, fragmentShaderCode);
   if (!renderProgramID) {
     LOGE("Could not create render program.");
@@ -289,10 +332,14 @@ bool ComputeShaderParticles::setupGraphics(int w, int h) {
 
   updateParticlesProgramID =
       createComputeShaderProgram(updateParticlesComputeShaderCode);
-  if (!renderTexureProgramID) {
+  if (!updateParticlesProgramID) {
     LOGE("Could not create update Particles Program.");
     return false;
   }
+
+  CreateAllTextures();
+  createSSBO();
+  genVertexBuffers();
 
   glViewport(0, 0, w, h);
   checkGlError("glViewport");
@@ -330,6 +377,7 @@ void ComputeShaderParticles::CreateAllTextures() {
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, config.width, config.height, 0,
                  GL_RGBA, GL_FLOAT, data);
     delete[] data;
+    checkGlError("gen texture 0 ");
   }
 
   if (1) {
@@ -345,47 +393,16 @@ void ComputeShaderParticles::CreateAllTextures() {
     delete[] data;
   }
 
-  if (1) {
-    int sizeX = config.particleCountX;
-    int sizeY = config.particleCountY;
+  checkGlError("before active texture 0 ");
+  glActiveTexture(GL_TEXTURE0);
+  checkGlError("before bind texture 0 ");
+  glBindImageTexture(0, textureID, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
+  checkGlError("xxxxxxxxxactive texture 0 ");
 
-    auto sz = sizeX * sizeY;
-    float *data = new float[sz * 4];
-    for (int i = 0; i < sz; ++i) {
-      data[i * 4 + 0] = config.width * (rand() / float(RAND_MAX));
-      data[i * 4 + 1] = config.height * (rand() / float(RAND_MAX));
-      data[i * 4 + 2] = 0.0;
-      data[i * 4 + 3] = 0.0;
-    }
+  glActiveTexture(GL_TEXTURE0 + 1);
+  glBindImageTexture(1, particleCountTextureID, 0, GL_FALSE, 0, GL_READ_WRITE, GL_R32UI);
+  checkGlError("active texture 1");
 
-    glGenTextures(1, &particlePositionTextureID);
-    glBindTexture(GL_TEXTURE_2D, particlePositionTextureID);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, sizeX, sizeY, 0, GL_RGBA,
-                 GL_FLOAT, data);
-    delete[] data;
-  }
-
-  if (1) {
-    int sizeX = config.particleCountX;
-    int sizeY = config.particleCountY;
-
-    auto sz = sizeX * sizeY;
-    float *data = new float[sz];
-    for (int i = 0; i < sz; ++i) {
-      data[i] = config.massMin +
-                (config.massMax - config.massMin) * (float(rand()) / RAND_MAX);
-    }
-
-    glGenTextures(1, &particleMassTextureID);
-    glBindTexture(GL_TEXTURE_2D, particleMassTextureID);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, sizeX, sizeY, 0, GL_RED, GL_FLOAT,
-                 data);
-    delete[] data;
-  }
 }
 GLuint ComputeShaderParticles::createComputeShaderProgram(
     const char *pComputeSource) {
@@ -423,4 +440,78 @@ GLuint ComputeShaderParticles::createComputeShaderProgram(
   LOGI("Create computeShader success, program = %d", program);
 
   return program;
+}
+void ComputeShaderParticles::createSSBO() {
+  LOGI("init_ssbo");
+  if (ssbo_particles_ != 0) {
+    LOGI("SSBO already init");
+    return;
+  }
+  glGenBuffers(1, &ssbo_particles_);
+  glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_particles_);
+  glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(ParticlesBuffer),
+               nullptr, GL_STATIC_DRAW);
+
+  int bufMask = GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT;
+  ssbo_particles_buffer = static_cast<struct ParticlesBuffer *>(glMapBufferRange(
+      GL_SHADER_STORAGE_BUFFER,
+      0,
+      sizeof(ParticlesBuffer),
+      bufMask));
+
+  glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+  checkGlError("init SSBO");
+
+  initParticleProperties();
+
+}
+void ComputeShaderParticles::releaseSSBO() {
+  glDeleteBuffers(1, &ssbo_particles_);
+  ssbo_particles_ = 0;
+  glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+}
+void ComputeShaderParticles::initParticleProperties() {
+  LOGI("init particles properties");
+  if (ssbo_particles_ == 0) {
+    LOGE("particles SSBO not init");
+    return;
+  }
+
+  glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_particles_);
+  checkGlError("glBindBuffer SSBO");
+
+  for  (auto i = 0; i < 1024; ++i) {
+    for (auto j = 0; j < 1024; ++j) {
+      auto pos_w = config.width * (rand() / float(RAND_MAX));
+      auto pos_h = config.height * (rand() / float(RAND_MAX));
+      auto mass = config.massMin +
+                  (config.massMax - config.massMin) * (float(rand()) / RAND_MAX);  //? 哪里有问题吗
+      ssbo_particles_buffer->particles_position_x[i][j] = pos_w;
+      ssbo_particles_buffer->particles_position_y[i][j] = pos_h;
+      ssbo_particles_buffer->particles_velocity_x[i][j] = 0.0;
+      ssbo_particles_buffer->particles_velocity_y[i][j] = 0.0;
+      ssbo_particles_buffer->particles_mass[i][j] = mass;
+    }
+  }
+
+  glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+  checkGlError("init particle SSBO");
+}
+void ComputeShaderParticles::genVertexBuffers() {
+
+  glGenVertexArrays(1, &vertArray);
+  glBindVertexArray(vertArray);
+
+  glGenBuffers(1, &posBuf);
+  glBindBuffer(GL_ARRAY_BUFFER, posBuf);
+  float data[] = {
+      -1.0f, -1.0f,
+      -1.0f,  1.0f,
+      1.0f, -1.0f,
+      1.0f,  1.0f
+  };
+  glBufferData(GL_ARRAY_BUFFER, sizeof(float)*8, data, GL_STREAM_DRAW);
+  GLint posPtr = glGetAttribLocation(renderProgramID, "pos");
+  glVertexAttribPointer(posPtr, 2, GL_FLOAT, GL_FALSE, 0, 0);
+  glEnableVertexAttribArray(posPtr);
 }
