@@ -40,9 +40,22 @@ precision mediump float;
 in vec2 uv;
 out vec3 color;
 
+layout(std430, binding = 0) buffer SSBO_particles {
+  float particles_position_x[1024][1024];
+  float particles_position_y[1024][1024];
+  float particles_velocity_x[1024][1024];
+  float particles_velocity_y[1024][1024];
+  float particles_mass[1024][1024];
+  int particles_count[1024][1024];
+};
 
 void main() {
-  color = vec3(0.3,0.4,0.5);
+  int x = int(uv.x * 1024.0);
+  int y = int(uv.y * 1024.0);
+  int count = particles_count[x][y];
+  float v =  float(count) / 15.0;
+  color = vec3(v * 1.0 + 0.0, v * 1.0 + 0.0, v * 1.0 + 0.0); //填充颜色
+//  color = vec3(0.3,0.4,0.5); //测试使用
 }
 )glsl";
 
@@ -189,7 +202,7 @@ void main() {
         particles_velocity_x[id.x][id.y] = v.z;
         particles_velocity_y[id.x][id.y] = v.w;
         particles_count[id.x][id.y] = count;
-//        particles_count[100][100] = 100;   //测试读取数据，当前路线是通的
+        //particles_count[id.x][id.y] = id.x + id.y;   //测试读取数据，当前路线是通的
 }
 )glsl";
 
@@ -288,68 +301,59 @@ void ComputeShaderParticles::renderFrame() {
     return;
   }
 
-  double currentTime =  getCurrentTime();
-  double timeSinceLastFrame = currentTime - lastFrameTime;
-  lastFrameTime += timeSinceLastFrame;
-  if (currentTime - lastUpdateTime > 1.0) {
-    lastUpdateTime = currentTime;
-    m = (rand() / float(RAND_MAX)) * 10.0;
-    n = (rand() / float(RAND_MAX)) * 10.0;
-    printf("m: %f, n: %f\n", m, n);
-  }
-  LOGI("timeSinceLastFrame: %f", timeSinceLastFrame);
+//  double currentTime =  getCurrentTime();
+//  double timeSinceLastFrame = currentTime - lastFrameTime;
+//  lastFrameTime += timeSinceLastFrame;
+//  if (currentTime - lastUpdateTime > 1.0) {
+//    lastUpdateTime = currentTime;
+//    m = (rand() / float(RAND_MAX)) * 10.0;
+//    n = (rand() / float(RAND_MAX)) * 10.0;
+//    printf("m: %f, n: %f\n", m, n);
+//  }
+//  LOGI("timeSinceLastFrame: %f", timeSinceLastFrame);
 
   // Update the particles compute shader program
-  glUseProgram(updateParticlesProgramID);
-  checkGlError("gl use update Particles Program ");
-
-  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssbo_particles_); //? 这个有问题？
-//  glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_particles_);
+//  glUseProgram(updateParticlesProgramID);
+//  checkGlError("gl use update Particles Program ");
+  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssbo_particles_);
   int bufMask = GL_MAP_WRITE_BIT | GL_MAP_READ_BIT;
   ParticlesBuffer *ssbo_particles_buffer = static_cast<ParticlesBuffer *>(glMapBufferRange(
       GL_SHADER_STORAGE_BUFFER,
       0,
       sizeof(ParticlesBuffer),
       bufMask));
-  checkGlError("gl Map Buffer Range");
   if (!ssbo_particles_buffer) {
+    checkGlError("gl Map Buffer Range");
     LOGE("Could not map the SSBO buffer");
     return;
   }
-
-  glUniform1f(glGetUniformLocation(updateParticlesProgramID, "timeSinceLastFrame"), timeSinceLastFrame);
-  glUniform1f(glGetUniformLocation(updateParticlesProgramID, "m"), m);
-  glUniform1f(glGetUniformLocation(updateParticlesProgramID, "n"), n);
-  glDispatchCompute(config.particleCountX / 16, config.particleCountY / 16, 1);
-  checkGlError("Update the particles");
-
-  // shader program，尝试直接读取以及绘制
+//
+//  glUniform1f(glGetUniformLocation(updateParticlesProgramID, "timeSinceLastFrame"), timeSinceLastFrame);
+//  glUniform1f(glGetUniformLocation(updateParticlesProgramID, "m"), m);
+//  glUniform1f(glGetUniformLocation(updateParticlesProgramID, "n"), n);
+//  glDispatchCompute(config.particleCountX / 16, config.particleCountY / 16, 1);
+//  checkGlError("Update the particles");
+//
+//  // shader program，尝试直接读取以及绘制
   glUseProgram(renderProgramID);
   glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-
-  /* 打印数据看是否有更新 */
-  GLsync Comp_sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
-  auto sync_result = glClientWaitSync(Comp_sync, 0, GL_TIMEOUT_IGNORED);
-
-  //print 每一个点的数量
-//  for  (auto i = 0; i < 1024; ++i) {
-//    for (auto j = 0; j < 1024; ++j) {
-//      auto count = ssbo_particles_buffer->particles_count[i][j];
-//      LOGI("particles count at [%d,%d] %d", i,j,count);
-//    }
-//  }
+//
+//  /* 打印数据看是否有更新 */
+//  GLsync Comp_sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+//  auto _sync_result = glClientWaitSync(Comp_sync, 0, GL_TIMEOUT_IGNORED);
+//
   auto count = ssbo_particles_buffer->particles_count[100][100];
-  LOGI("particles count at [%d,%d] %d", 100,100,count);
-
-  GLsync Reset_sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
-  glWaitSync(Reset_sync, 0, GL_TIMEOUT_IGNORED);
-  glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+//  LOGI("particles count at [%d,%d] %d", 100,100,count);
+//
+//  GLsync Reset_sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+//  glWaitSync(Reset_sync, 0, GL_TIMEOUT_IGNORED);
+//  glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
   glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
   glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, 0);
-//  glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-  glUseProgram(0);
-  glDeleteSync(Comp_sync);
-  glDeleteSync(Reset_sync);
+////  glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+//  glUseProgram(0);
+//  glDeleteSync(Comp_sync);
+//  glDeleteSync(Reset_sync);
 
 }
 bool ComputeShaderParticles::setupGraphics(int w, int h) {
@@ -488,13 +492,17 @@ void ComputeShaderParticles::initParticleProperties() {
       auto pos_w = config.width * (rand() / float(RAND_MAX));
       auto pos_h = config.height * (rand() / float(RAND_MAX));
       auto mass = config.massMin +
-                  (config.massMax - config.massMin) * (float(rand()) / RAND_MAX);  //? 哪里有问题吗
+                  (config.massMax - config.massMin) * (float(rand()) / RAND_MAX);
       ssbo_particles_buffer->particles_position_x[i][j] = pos_w;
       ssbo_particles_buffer->particles_position_y[i][j] = pos_h;
       ssbo_particles_buffer->particles_velocity_x[i][j] = 0.0;
       ssbo_particles_buffer->particles_velocity_y[i][j] = 0.0;
       ssbo_particles_buffer->particles_mass[i][j] = mass;
       ssbo_particles_buffer->particles_count[i][j] = 0;
+
+      // 为了测试绘制，直接在这里模拟一个分布并送入
+      auto count = static_cast<int>(15.0 * (rand() / float(RAND_MAX)));
+      ssbo_particles_buffer->particles_count[i][j] = count;
     }
   }
 
