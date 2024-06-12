@@ -1,5 +1,6 @@
 //
 // Created by 王锐超 on 2024/6/11.
+// 当前所有image read/load 不支持 rgba32f
 //
 
 #ifndef NDK_SAMPLES_COMPUTESHADERPARTICLES_H

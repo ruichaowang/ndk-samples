@@ -54,11 +54,11 @@ void main() {
   int y = int(uv.y * 1024.0);
   int count = particles_count[x][y];
   float v =  float(count) / 15.0;
-  color = vec3(v * 1.0 + 0.0, v * 1.0 + 0.0, v * 1.0 + 0.0); //填充颜色
-//  color = vec3(0.3,0.4,0.5); //测试使用
+  color = vec3(v * 1.0 + 0.0, v * 1.0 + 0.0, v * 1.0 + 0.0);  //填充颜色,参数按照固定值去设定
 }
 )glsl";
 
+// 这个shader 可以去掉，已经被省略
 const auto renderTextureComputeShaderCode = R"glsl(
 #version 320 es
 
@@ -164,7 +164,7 @@ void main() {
 	v.y += v.w * timeSinceLastFrame;
 
 	// 力的方向
-	ivec2 gradient = genGradients(ivec2(v.x, v.y));
+	ivec2 gradient = genGradients(ivec2(v.x, v.y));  //有可行？
 	// 力的大小
 	float vibration = chladni_equation(ivec2(v.x, v.y));
 	// 求出加速度
@@ -184,7 +184,8 @@ void main() {
 		}
 	}
 
-        int count = atomicAdd(particles_count[id.x][id.y], 1);
+        int count = particles_count[int(v.x)][int(v.y)];
+        atomicAdd(particles_count[int(v.x)][int(v.y)], 1); //?是不是加完之后的，格式是不是不对
         float drag1 = 0.8;
         float drag2 = 0.0001 * float(v.z*v.z + v.w*v.w);
         float drag3 = 0.3 * float(count);
@@ -201,8 +202,7 @@ void main() {
         particles_position_y[id.x][id.y] = v.y;
         particles_velocity_x[id.x][id.y] = v.z;
         particles_velocity_y[id.x][id.y] = v.w;
-        particles_count[id.x][id.y] = count;
-        //particles_count[id.x][id.y] = id.x + id.y;   //测试读取数据，当前路线是通的
+//        particles_count[id.x][id.y] = count;
 }
 )glsl";
 
@@ -301,20 +301,20 @@ void ComputeShaderParticles::renderFrame() {
     return;
   }
 
-//  double currentTime =  getCurrentTime();
-//  double timeSinceLastFrame = currentTime - lastFrameTime;
-//  lastFrameTime += timeSinceLastFrame;
-//  if (currentTime - lastUpdateTime > 1.0) {
-//    lastUpdateTime = currentTime;
-//    m = (rand() / float(RAND_MAX)) * 10.0;
-//    n = (rand() / float(RAND_MAX)) * 10.0;
-//    printf("m: %f, n: %f\n", m, n);
-//  }
+  double currentTime =  getCurrentTime();
+  double timeSinceLastFrame = currentTime - lastFrameTime;
+  lastFrameTime += timeSinceLastFrame;
+  if (currentTime - lastUpdateTime > 1.0) {
+    lastUpdateTime = currentTime;
+    m = (rand() / float(RAND_MAX)) * 10.0;
+    n = (rand() / float(RAND_MAX)) * 10.0;
+    printf("m: %f, n: %f\n", m, n);
+  }
 //  LOGI("timeSinceLastFrame: %f", timeSinceLastFrame);
 
   // Update the particles compute shader program
-//  glUseProgram(updateParticlesProgramID);
-//  checkGlError("gl use update Particles Program ");
+  glUseProgram(updateParticlesProgramID);
+  checkGlError("gl use update Particles Program ");
   glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssbo_particles_);
   int bufMask = GL_MAP_WRITE_BIT | GL_MAP_READ_BIT;
   ParticlesBuffer *ssbo_particles_buffer = static_cast<ParticlesBuffer *>(glMapBufferRange(
@@ -327,33 +327,33 @@ void ComputeShaderParticles::renderFrame() {
     LOGE("Could not map the SSBO buffer");
     return;
   }
-//
-//  glUniform1f(glGetUniformLocation(updateParticlesProgramID, "timeSinceLastFrame"), timeSinceLastFrame);
-//  glUniform1f(glGetUniformLocation(updateParticlesProgramID, "m"), m);
-//  glUniform1f(glGetUniformLocation(updateParticlesProgramID, "n"), n);
-//  glDispatchCompute(config.particleCountX / 16, config.particleCountY / 16, 1);
-//  checkGlError("Update the particles");
-//
-//  // shader program，尝试直接读取以及绘制
+
+  glUniform1f(glGetUniformLocation(updateParticlesProgramID, "timeSinceLastFrame"), timeSinceLastFrame);
+  glUniform1f(glGetUniformLocation(updateParticlesProgramID, "m"), m);
+  glUniform1f(glGetUniformLocation(updateParticlesProgramID, "n"), n);
+  glDispatchCompute(config.particleCountX / 16, config.particleCountY / 16, 1);
+  checkGlError("Update the particles");
+
+  // shader program，尝试直接读取以及绘制
   glUseProgram(renderProgramID);
   glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 //
 //  /* 打印数据看是否有更新 */
-//  GLsync Comp_sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+  GLsync Comp_sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
 //  auto _sync_result = glClientWaitSync(Comp_sync, 0, GL_TIMEOUT_IGNORED);
 //
-  auto count = ssbo_particles_buffer->particles_count[100][100];
+//  auto count = ssbo_particles_buffer->particles_count[100][100];
 //  LOGI("particles count at [%d,%d] %d", 100,100,count);
 //
-//  GLsync Reset_sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
-//  glWaitSync(Reset_sync, 0, GL_TIMEOUT_IGNORED);
-//  glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+  GLsync Reset_sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+  glWaitSync(Reset_sync, 0, GL_TIMEOUT_IGNORED);
+  glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
   glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
   glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, 0);
-////  glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-//  glUseProgram(0);
-//  glDeleteSync(Comp_sync);
-//  glDeleteSync(Reset_sync);
+  glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+  glUseProgram(0);
+  glDeleteSync(Comp_sync);
+  glDeleteSync(Reset_sync);
 
 }
 bool ComputeShaderParticles::setupGraphics(int w, int h) {
