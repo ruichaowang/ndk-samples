@@ -15,8 +15,8 @@
 
 class ComputeShaderParticles {
   struct ParticlesBuffer {
-    float particles_position_x[1024][1024];
-    float particles_position_y[1024][1024];
+    int particles_position_x[1024][1024];
+    int particles_position_y[1024][1024];
     float particles_velocity_x[1024][1024];
     float particles_velocity_y[1024][1024];
     float particles_mass[1024][1024];
@@ -36,7 +36,6 @@ class ComputeShaderParticles {
   GLuint loadShader(GLenum shaderType, const char* pSource);
   GLuint createProgram(const char* pVertexSource, const char* pFragmentSource);
   GLuint createComputeShaderProgram(const char* pComputeSource);
-  void CreateAllTextures();
   void createSSBO();
   void initParticleProperties();
   void releaseSSBO();

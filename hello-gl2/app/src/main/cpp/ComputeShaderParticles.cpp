@@ -12,7 +12,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+
 #include <iostream>
+
 #include "config.h"
 
 static Config config;
@@ -41,8 +43,8 @@ in vec2 uv;
 out vec3 color;
 
 layout(std430, binding = 0) buffer SSBO_particles {
-  float particles_position_x[1024][1024];
-  float particles_position_y[1024][1024];
+  int particles_position_x[1024][1024];
+  int particles_position_y[1024][1024];
   float particles_velocity_x[1024][1024];
   float particles_velocity_y[1024][1024];
   float particles_mass[1024][1024];
@@ -54,7 +56,9 @@ void main() {
   int y = int(uv.y * 1024.0);
   int count = particles_count[x][y];
   float v =  float(count) / 15.0;
+  particles_count[x][y] = 0;
   color = vec3(v * 1.0 + 0.0, v * 1.0 + 0.0, v * 1.0 + 0.0);  //填充颜色,参数按照固定值去设定
+
 }
 )glsl";
 
@@ -66,8 +70,8 @@ precision highp int;
 layout(local_size_x = 16, local_size_y = 16) in;
 
 layout(std430, binding = 0) buffer SSBO_particles {
-  float particles_position_x[1024][1024];
-  float particles_position_y[1024][1024];
+  int particles_position_x[1024][1024];
+  int particles_position_y[1024][1024];
   float particles_velocity_x[1024][1024];
   float particles_velocity_y[1024][1024];
   float particles_mass[1024][1024];
@@ -136,8 +140,8 @@ ivec2 genGradients(ivec2 id) {
 void main() {
 	ivec2 id = ivec2(gl_GlobalInvocationID.xy);
         vec4 v;
-        v.x = particles_position_x[id.x][id.y];
-        v.y = particles_position_y[id.x][id.y];
+        v.x = float(particles_position_x[id.x][id.y]);
+        v.y = float(particles_position_y[id.x][id.y]);
         v.z = particles_velocity_x[id.x][id.y];
         v.w = particles_velocity_y[id.x][id.y];
         float mass = particles_mass[id.x][id.y];
@@ -147,9 +151,9 @@ void main() {
 	v.y += v.w * timeSinceLastFrame;
 
 	// 力的方向
-	ivec2 gradient = genGradients(ivec2(v.x, v.y));  //有可行？
+	ivec2 gradient = genGradients(ivec2(int(v.x), int(v.y)));
 	// 力的大小
-	float vibration = chladni_equation(ivec2(v.x, v.y));
+	float vibration = chladni_equation(ivec2(int(v.x), int(v.y)));
 	// 求出加速度
 	float c = (timeSinceLastFrame * (vibration * 60.0 * 20.0)) / mass;
 	// 更新下一帧速度
@@ -167,8 +171,7 @@ void main() {
 		}
 	}
 
-        int count = particles_count[int(v.x)][int(v.y)];
-        atomicAdd(particles_count[int(v.x)][int(v.y)], 1); //?是不是加完之后的，格式是不是不对
+        int count = atomicAdd(particles_count[int(v.x)][int(v.y)], 1);
         float drag1 = 0.8;
         float drag2 = 0.0001 * float(v.z*v.z + v.w*v.w);
         float drag3 = 0.3 * float(count);
@@ -180,12 +183,18 @@ void main() {
         else if (v.w < -drag) v.w += drag;
         else v.w = 0.0;
 
+        float s = 0.5;
+	if (v.x < 0.0) { v.x = 0.0; v.z *= -s; v.w *= s; }
+	if (v.x > 1024.0) { v.x = 1024.0; v.z *= -s; v.w *= s; }
+	if (v.y < 0.0) { v.y = 0.0; v.w *= -s; v.z *= s; }
+	if (v.y > 1024.0) { v.y = 1024.0; v.w *= -s; v.z *= s; }
+
         // 保存结果到 SSBO
-        particles_position_x[id.x][id.y] = v.x;
-        particles_position_y[id.x][id.y] = v.y;
+        particles_position_x[id.x][id.y] = int(v.x);
+        particles_position_y[id.x][id.y] = int(v.y);
         particles_velocity_x[id.x][id.y] = v.z;
         particles_velocity_y[id.x][id.y] = v.w;
-//        particles_count[id.x][id.y] = count;
+        particles_count[id.x][id.y] = count;
 }
 )glsl";
 
@@ -193,9 +202,7 @@ const GLfloat gTriangleVertices[] = {0.0f, 0.5f, -0.5f, -0.5f, 0.5f, -0.5f};
 
 ComputeShaderParticles::ComputeShaderParticles() {}
 
-ComputeShaderParticles::~ComputeShaderParticles() {
-  releaseSSBO();
-}
+ComputeShaderParticles::~ComputeShaderParticles() { releaseSSBO(); }
 
 void ComputeShaderParticles::checkGlError(const char *op) {
   for (GLint error = glGetError(); error; error = glGetError()) {
@@ -284,7 +291,7 @@ void ComputeShaderParticles::renderFrame() {
     return;
   }
 
-  double currentTime =  getCurrentTime();
+  double currentTime = getCurrentTime();
   double timeSinceLastFrame = currentTime - lastFrameTime;
   lastFrameTime += timeSinceLastFrame;
   if (currentTime - lastUpdateTime > 1.0) {
@@ -293,41 +300,38 @@ void ComputeShaderParticles::renderFrame() {
     n = (rand() / float(RAND_MAX)) * 10.0;
     printf("m: %f, n: %f\n", m, n);
   }
-//  LOGI("timeSinceLastFrame: %f", timeSinceLastFrame);
+  //  LOGI("timeSinceLastFrame: %f", timeSinceLastFrame);
 
   // Update the particles compute shader program
   glUseProgram(updateParticlesProgramID);
   checkGlError("gl use update Particles Program ");
   glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssbo_particles_);
   int bufMask = GL_MAP_WRITE_BIT | GL_MAP_READ_BIT;
-  ParticlesBuffer *ssbo_particles_buffer = static_cast<ParticlesBuffer *>(glMapBufferRange(
-      GL_SHADER_STORAGE_BUFFER,
-      0,
-      sizeof(ParticlesBuffer),
-      bufMask));
+  ParticlesBuffer *ssbo_particles_buffer =
+      static_cast<ParticlesBuffer *>(glMapBufferRange(
+          GL_SHADER_STORAGE_BUFFER, 0, sizeof(ParticlesBuffer), bufMask));
   if (!ssbo_particles_buffer) {
     checkGlError("gl Map Buffer Range");
     LOGE("Could not map the SSBO buffer");
     return;
   }
 
-  glUniform1f(glGetUniformLocation(updateParticlesProgramID, "timeSinceLastFrame"), timeSinceLastFrame);
+  glUniform1f(
+      glGetUniformLocation(updateParticlesProgramID, "timeSinceLastFrame"),
+      timeSinceLastFrame);
   glUniform1f(glGetUniformLocation(updateParticlesProgramID, "m"), m);
   glUniform1f(glGetUniformLocation(updateParticlesProgramID, "n"), n);
   glDispatchCompute(config.particleCountX / 16, config.particleCountY / 16, 1);
   checkGlError("Update the particles");
 
+  GLsync Comp_sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+  auto _sync_result = glClientWaitSync(Comp_sync, 0, GL_TIMEOUT_IGNORED);
+
   // shader program，尝试直接读取以及绘制
   glUseProgram(renderProgramID);
   glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-//
-//  /* 打印数据看是否有更新 */
-  GLsync Comp_sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
-//  auto _sync_result = glClientWaitSync(Comp_sync, 0, GL_TIMEOUT_IGNORED);
-//
-//  auto count = ssbo_particles_buffer->particles_count[100][100];
-//  LOGI("particles count at [%d,%d] %d", 100,100,count);
-//
+
+  // 结束的逻辑
   GLsync Reset_sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
   glWaitSync(Reset_sync, 0, GL_TIMEOUT_IGNORED);
   glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
@@ -337,7 +341,6 @@ void ComputeShaderParticles::renderFrame() {
   glUseProgram(0);
   glDeleteSync(Comp_sync);
   glDeleteSync(Reset_sync);
-
 }
 bool ComputeShaderParticles::setupGraphics(int w, int h) {
   printGLString("Version", GL_VERSION);
@@ -362,7 +365,6 @@ bool ComputeShaderParticles::setupGraphics(int w, int h) {
     return false;
   }
 
-  CreateAllTextures();
   createSSBO();
   genVertexBuffers();
 
@@ -382,9 +384,6 @@ std::string ComputeShaderParticles::formatShaderCode(std::string shaderCode) {
     }
   }
   return shaderCode;
-}
-void ComputeShaderParticles::CreateAllTextures() {
-  //
 }
 GLuint ComputeShaderParticles::createComputeShaderProgram(
     const char *pComputeSource) {
@@ -431,8 +430,8 @@ void ComputeShaderParticles::createSSBO() {
   }
   glGenBuffers(1, &ssbo_particles_);
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_particles_);
-  glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(ParticlesBuffer),
-               nullptr, GL_DYNAMIC_COPY);
+  glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(ParticlesBuffer), nullptr,
+               GL_DYNAMIC_COPY);
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
   checkGlError("init SSBO");
 
@@ -452,23 +451,21 @@ void ComputeShaderParticles::initParticleProperties() {
 
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_particles_);
   int bufMask = GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT;
-  ParticlesBuffer *ssbo_particles_buffer = static_cast<ParticlesBuffer *>(glMapBufferRange(
-      GL_SHADER_STORAGE_BUFFER,
-      0,
-      sizeof(ParticlesBuffer),
-      bufMask));
+  ParticlesBuffer *ssbo_particles_buffer =
+      static_cast<ParticlesBuffer *>(glMapBufferRange(
+          GL_SHADER_STORAGE_BUFFER, 0, sizeof(ParticlesBuffer), bufMask));
   checkGlError("gl Map Buffer Range");
   if (!ssbo_particles_buffer) {
-        LOGE("Could not map the SSBO buffer");
+    LOGE("Could not map the SSBO buffer");
     return;
   }
 
-  for  (auto i = 0; i < 1024; ++i) {
+  for (auto i = 0; i < 1024; ++i) {
     for (auto j = 0; j < 1024; ++j) {
       auto pos_w = config.width * (rand() / float(RAND_MAX));
       auto pos_h = config.height * (rand() / float(RAND_MAX));
-      auto mass = config.massMin +
-                  (config.massMax - config.massMin) * (float(rand()) / RAND_MAX);
+      auto mass = config.massMin + (config.massMax - config.massMin) *
+                                       (float(rand()) / RAND_MAX);
       ssbo_particles_buffer->particles_position_x[i][j] = pos_w;
       ssbo_particles_buffer->particles_position_y[i][j] = pos_h;
       ssbo_particles_buffer->particles_velocity_x[i][j] = 0.0;
@@ -476,9 +473,9 @@ void ComputeShaderParticles::initParticleProperties() {
       ssbo_particles_buffer->particles_mass[i][j] = mass;
       ssbo_particles_buffer->particles_count[i][j] = 0;
 
-      // 为了测试绘制，直接在这里模拟一个分布并送入
-      auto count = static_cast<int>(15.0 * (rand() / float(RAND_MAX)));
-      ssbo_particles_buffer->particles_count[i][j] = count;
+      // 为了测试绘制，直接在这里模拟一个分布并送入,这部分省略
+//      auto count = static_cast<int>(15.0 * (rand() / float(RAND_MAX)));
+//      ssbo_particles_buffer->particles_count[i][j] = count;
     }
   }
 
@@ -491,19 +488,13 @@ void ComputeShaderParticles::initParticleProperties() {
   LOGI("init particles properties done");
 }
 void ComputeShaderParticles::genVertexBuffers() {
-
   glGenVertexArrays(1, &vertArray);
   glBindVertexArray(vertArray);
 
   glGenBuffers(1, &posBuf);
   glBindBuffer(GL_ARRAY_BUFFER, posBuf);
-  float data[] = {
-      -1.0f, -1.0f,
-      -1.0f,  1.0f,
-      1.0f, -1.0f,
-      1.0f,  1.0f
-  };
-  glBufferData(GL_ARRAY_BUFFER, sizeof(float)*8, data, GL_STREAM_DRAW);
+  float data[] = {-1.0f, -1.0f, -1.0f, 1.0f, 1.0f, -1.0f, 1.0f, 1.0f};
+  glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 8, data, GL_STREAM_DRAW);
   GLint posPtr = glGetAttribLocation(renderProgramID, "pos");
   glVertexAttribPointer(posPtr, 2, GL_FLOAT, GL_FALSE, 0, 0);
   glEnableVertexAttribArray(posPtr);
