@@ -43,8 +43,8 @@ in vec2 uv;
 out vec3 color;
 
 layout(std430, binding = 0) buffer SSBO_particles {
-  int particles_position_x[1024][1024];
-  int particles_position_y[1024][1024];
+  float particles_position_x[1024][1024];
+  float particles_position_y[1024][1024];
   float particles_velocity_x[1024][1024];
   float particles_velocity_y[1024][1024];
   float particles_mass[1024][1024];
@@ -70,8 +70,8 @@ precision highp int;
 layout(local_size_x = 16, local_size_y = 16) in;
 
 layout(std430, binding = 0) buffer SSBO_particles {
-  int particles_position_x[1024][1024];
-  int particles_position_y[1024][1024];
+  float particles_position_x[1024][1024];
+  float particles_position_y[1024][1024];
   float particles_velocity_x[1024][1024];
   float particles_velocity_y[1024][1024];
   float particles_mass[1024][1024];
@@ -127,8 +127,9 @@ ivec2 genGradients(ivec2 id) {
 					}
 					can_use = 0;
 				}
-                                can_use += 1;
+
 				rets[uint(can_use)] = ivec2(i, j);
+                                can_use += 1;
 			}
 		}
 	}
@@ -140,8 +141,8 @@ ivec2 genGradients(ivec2 id) {
 void main() {
 	ivec2 id = ivec2(gl_GlobalInvocationID.xy);
         vec4 v;
-        v.x = float(particles_position_x[id.x][id.y]);
-        v.y = float(particles_position_y[id.x][id.y]);
+        v.x = particles_position_x[id.x][id.y];
+        v.y = particles_position_y[id.x][id.y];
         v.z = particles_velocity_x[id.x][id.y];
         v.w = particles_velocity_y[id.x][id.y];
         float mass = particles_mass[id.x][id.y];
@@ -171,7 +172,17 @@ void main() {
 		}
 	}
 
+        if ((x < 3.0 || x > w - 3.0) || (y < 3.0 || y > h - 3.0)) {
+            if (rand(vec2(x, y)) < 0.1) {
+                float x_amend = rand(vec2(x + 0.1, y + 0.2)) * w;
+                float y_amend = rand(vec2(x + 0.3, y + 0.4)) * h;
+                v.x = x_amend;
+                v.y = y_amend;
+            }
+        }
+
         int count = atomicAdd(particles_count[int(v.x)][int(v.y)], 1);
+//        particles_count[int(v.x)][int(v.y)] = count;
         float drag1 = 0.8;
         float drag2 = 0.0001 * float(v.z*v.z + v.w*v.w);
         float drag3 = 0.3 * float(count);
@@ -190,11 +201,12 @@ void main() {
 	if (v.y > 1024.0) { v.y = 1024.0; v.w *= -s; v.z *= s; }
 
         // 保存结果到 SSBO
-        particles_position_x[id.x][id.y] = int(v.x);
-        particles_position_y[id.x][id.y] = int(v.y);
+        particles_position_x[id.x][id.y] = v.x;
+        particles_position_y[id.x][id.y] = v.y;
         particles_velocity_x[id.x][id.y] = v.z;
         particles_velocity_y[id.x][id.y] = v.w;
-        particles_count[id.x][id.y] = count;
+
+//        particles_count[int(v.x)][int(v.y)] = int(vibration * 15.0);
 }
 )glsl";
 
@@ -324,12 +336,14 @@ void ComputeShaderParticles::renderFrame() {
   glDispatchCompute(config.particleCountX / 16, config.particleCountY / 16, 1);
   checkGlError("Update the particles");
 
-  GLsync Comp_sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
-  auto _sync_result = glClientWaitSync(Comp_sync, 0, GL_TIMEOUT_IGNORED);
+  glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
   // shader program，尝试直接读取以及绘制
   glUseProgram(renderProgramID);
   glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+  GLsync Comp_sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+  auto _sync_result = glClientWaitSync(Comp_sync, 0, GL_TIMEOUT_IGNORED);
 
   // 结束的逻辑
   GLsync Reset_sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
@@ -474,8 +488,8 @@ void ComputeShaderParticles::initParticleProperties() {
       ssbo_particles_buffer->particles_count[i][j] = 0;
 
       // 为了测试绘制，直接在这里模拟一个分布并送入,这部分省略
-//      auto count = static_cast<int>(15.0 * (rand() / float(RAND_MAX)));
-//      ssbo_particles_buffer->particles_count[i][j] = count;
+      //      auto count = static_cast<int>(15.0 * (rand() / float(RAND_MAX)));
+      //      ssbo_particles_buffer->particles_count[i][j] = count;
     }
   }
 
