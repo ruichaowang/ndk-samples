@@ -65,9 +65,7 @@ static auto updateParticlesComputeShaderCode = R"glsl(
 #version 320 es
 precision highp float;
 precision highp int;
-precision highp uimage2D;
 
-layout(binding = 1, r32ui) uniform coherent uimage2D particleCountTexture;
 layout(local_size_x = 16, local_size_y = 16) in;
 
 layout(std430, binding = 0) buffer SSBO_particles {
@@ -76,6 +74,7 @@ layout(std430, binding = 0) buffer SSBO_particles {
   float particles_velocity_x[1024][1024];
   float particles_velocity_y[1024][1024];
   float particles_mass[1024][1024];
+  int particles_count[1024][1024];
 };
 
 uniform float timeSinceLastFrame;
@@ -170,7 +169,8 @@ void main() {
 			v.y = y_amend;
 		}
 	}
-	uint count = imageAtomicAdd(particleCountTexture, ivec2(v.x, v.y), uint(1));
+
+        int count = atomicAdd(particles_count[id.x][id.y], 1);
         float drag1 = 0.8;
         float drag2 = 0.0001 * float(v.z*v.z + v.w*v.w);
         float drag3 = 0.3 * float(count);
@@ -187,6 +187,8 @@ void main() {
         particles_position_y[id.x][id.y] = v.y;
         particles_velocity_x[id.x][id.y] = v.z;
         particles_velocity_y[id.x][id.y] = v.w;
+        particles_count[id.x][id.y] = count;
+//        particles_count[100][100] = 100;   //测试读取数据，当前路线是通的
 }
 )glsl";
 
@@ -281,6 +283,10 @@ void ComputeShaderParticles::renderFrame() {
   glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
   checkGlError("glClear");
 
+  if (!isSSBOReady) {
+    return;
+  }
+
   double currentTime =  getCurrentTime();
   double timeSinceLastFrame = currentTime - lastFrameTime;
   lastFrameTime += timeSinceLastFrame;
@@ -290,21 +296,55 @@ void ComputeShaderParticles::renderFrame() {
     n = (rand() / float(RAND_MAX)) * 10.0;
     printf("m: %f, n: %f\n", m, n);
   }
+  LOGI("timeSinceLastFrame: %f", timeSinceLastFrame);
 
   // Update the particles compute shader program
   glUseProgram(updateParticlesProgramID);
   checkGlError("gl use update Particles Program ");
 
+  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssbo_particles_); //? 这个有问题？
+//  glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_particles_);
+  int bufMask = GL_MAP_WRITE_BIT | GL_MAP_READ_BIT;
+  ParticlesBuffer *ssbo_particles_buffer = static_cast<ParticlesBuffer *>(glMapBufferRange(
+      GL_SHADER_STORAGE_BUFFER,
+      0,
+      sizeof(ParticlesBuffer),
+      bufMask));
+  checkGlError("gl Map Buffer Range");
+  if (!ssbo_particles_buffer) {
+    LOGE("Could not map the SSBO buffer");
+    return;
+  }
 
-
-  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssbo_particles_);
-
-  glUniform1i(glGetUniformLocation(updateParticlesProgramID, "particleCountTexture"), 1);
   glUniform1f(glGetUniformLocation(updateParticlesProgramID, "timeSinceLastFrame"), timeSinceLastFrame);
   glUniform1f(glGetUniformLocation(updateParticlesProgramID, "m"), m);
   glUniform1f(glGetUniformLocation(updateParticlesProgramID, "n"), n);
   glDispatchCompute(config.particleCountX / 16, config.particleCountY / 16, 1);
   checkGlError("Update the particles");
+
+  /* 打印数据看是否有更新 */
+  GLsync Comp_sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+  auto sync_result = glClientWaitSync(Comp_sync, 0, GL_TIMEOUT_IGNORED);
+
+  //print 每一个点的数量
+//  for  (auto i = 0; i < 1024; ++i) {
+//    for (auto j = 0; j < 1024; ++j) {
+//      auto count = ssbo_particles_buffer->particles_count[i][j];
+//      LOGI("particles count at [%d,%d] %d", i,j,count);
+//    }
+//  }
+  auto count = ssbo_particles_buffer->particles_count[100][100];
+  LOGI("particles count at [%d,%d] %d", 100,100,count);
+
+  GLsync Reset_sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+  glWaitSync(Reset_sync, 0, GL_TIMEOUT_IGNORED);
+  glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+  glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, 0);
+//  glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+  glUseProgram(0);
+  glDeleteSync(Comp_sync);
+  glDeleteSync(Reset_sync);
 
 }
 bool ComputeShaderParticles::setupGraphics(int w, int h) {
@@ -359,50 +399,7 @@ std::string ComputeShaderParticles::formatShaderCode(std::string shaderCode) {
   return shaderCode;
 }
 void ComputeShaderParticles::CreateAllTextures() {
-  if (1) {
-    auto sz = config.width * config.height;
-    float *data = new float[sz * 4];
-    for (int i = 0; i < sz; ++i) {
-      float c = float(i) / sz;
-      data[i * 4 + 0] = c;
-      data[i * 4 + 1] = c;
-      data[i * 4 + 2] = c;
-      data[i * 4 + 3] = 1.0;
-    }
-
-    glGenTextures(1, &textureID);
-    glBindTexture(GL_TEXTURE_2D, textureID);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, config.width, config.height, 0,
-                 GL_RGBA, GL_FLOAT, data);
-    delete[] data;
-    checkGlError("gen texture 0 ");
-  }
-
-  if (1) {
-    auto sz = config.width * config.height * 4;
-    GLuint *data = new GLuint[sz];
-    for (int i = 0; i < sz; ++i) data[i] = 2;
-    glGenTextures(1, &particleCountTextureID);
-    glBindTexture(GL_TEXTURE_2D, particleCountTextureID);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_R32UI, config.width, config.height, 0,
-                 GL_RED_INTEGER, GL_UNSIGNED_INT, data);
-    delete[] data;
-  }
-
-  checkGlError("before active texture 0 ");
-  glActiveTexture(GL_TEXTURE0);
-  checkGlError("before bind texture 0 ");
-  glBindImageTexture(0, textureID, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
-  checkGlError("xxxxxxxxxactive texture 0 ");
-
-  glActiveTexture(GL_TEXTURE0 + 1);
-  glBindImageTexture(1, particleCountTextureID, 0, GL_FALSE, 0, GL_READ_WRITE, GL_R32UI);
-  checkGlError("active texture 1");
-
+  //
 }
 GLuint ComputeShaderParticles::createComputeShaderProgram(
     const char *pComputeSource) {
@@ -450,20 +447,11 @@ void ComputeShaderParticles::createSSBO() {
   glGenBuffers(1, &ssbo_particles_);
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_particles_);
   glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(ParticlesBuffer),
-               nullptr, GL_STATIC_DRAW);
-
-  int bufMask = GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT;
-  ssbo_particles_buffer = static_cast<struct ParticlesBuffer *>(glMapBufferRange(
-      GL_SHADER_STORAGE_BUFFER,
-      0,
-      sizeof(ParticlesBuffer),
-      bufMask));
-
+               nullptr, GL_DYNAMIC_COPY);
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
   checkGlError("init SSBO");
 
   initParticleProperties();
-
 }
 void ComputeShaderParticles::releaseSSBO() {
   glDeleteBuffers(1, &ssbo_particles_);
@@ -478,7 +466,17 @@ void ComputeShaderParticles::initParticleProperties() {
   }
 
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_particles_);
-  checkGlError("glBindBuffer SSBO");
+  int bufMask = GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT;
+  ParticlesBuffer *ssbo_particles_buffer = static_cast<ParticlesBuffer *>(glMapBufferRange(
+      GL_SHADER_STORAGE_BUFFER,
+      0,
+      sizeof(ParticlesBuffer),
+      bufMask));
+  checkGlError("gl Map Buffer Range");
+  if (!ssbo_particles_buffer) {
+        LOGE("Could not map the SSBO buffer");
+    return;
+  }
 
   for  (auto i = 0; i < 1024; ++i) {
     for (auto j = 0; j < 1024; ++j) {
@@ -491,11 +489,17 @@ void ComputeShaderParticles::initParticleProperties() {
       ssbo_particles_buffer->particles_velocity_x[i][j] = 0.0;
       ssbo_particles_buffer->particles_velocity_y[i][j] = 0.0;
       ssbo_particles_buffer->particles_mass[i][j] = mass;
+      ssbo_particles_buffer->particles_count[i][j] = 0;
     }
   }
 
+  glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+  glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
   checkGlError("init particle SSBO");
+
+  isSSBOReady = true;
+  LOGI("init particles properties done");
 }
 void ComputeShaderParticles::genVertexBuffers() {
 

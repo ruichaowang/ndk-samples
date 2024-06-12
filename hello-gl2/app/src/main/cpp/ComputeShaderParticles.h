@@ -21,7 +21,9 @@ class ComputeShaderParticles {
     float particles_velocity_x[1024][1024];
     float particles_velocity_y[1024][1024];
     float particles_mass[1024][1024];
+    int particles_count[1024][1024];           // 每一个点的粒子数
   };
+
 
  public:
   ComputeShaderParticles();
@@ -57,7 +59,7 @@ class ComputeShaderParticles {
   GLuint renderTexureProgramID;      // Compute shader program
   GLuint updateParticlesProgramID;
   GLuint ssbo_particles_ = 0;
-  struct ParticlesBuffer *ssbo_particles_buffer;
+  std::atomic <bool> isSSBOReady = false;
   GLuint vertArray;   //这个还没有清理
   GLuint posBuf;     //这个还没有清理
   double lastFrameTime = 0.0;
