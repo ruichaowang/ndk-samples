@@ -38,10 +38,11 @@ const auto fragmentShaderCode = R"glsl(
 #version 320 es
 precision mediump float;
 in vec2 uv;
-uniform sampler2D sampler;
 out vec3 color;
+
+
 void main() {
-  color = texture(sampler, uv).rgb;
+  color = vec3(0.3,0.4,0.5);
 }
 )glsl";
 
@@ -321,6 +322,10 @@ void ComputeShaderParticles::renderFrame() {
   glUniform1f(glGetUniformLocation(updateParticlesProgramID, "n"), n);
   glDispatchCompute(config.particleCountX / 16, config.particleCountY / 16, 1);
   checkGlError("Update the particles");
+
+  // shader program，尝试直接读取以及绘制
+  glUseProgram(renderProgramID);
+  glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
   /* 打印数据看是否有更新 */
   GLsync Comp_sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
