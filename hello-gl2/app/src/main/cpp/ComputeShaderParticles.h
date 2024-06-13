@@ -1,7 +1,25 @@
 //
 // Created by 王锐超 on 2024/6/11.
 // 使用计算着色器实现粒子的物理效果
-//
+
+/*
+  对比粒子数量：
+  使用1024*1024 的面积统计粒子数量，屏幕绘制尺寸 1024*1024：
+    1024*1024， 10% CPU，90% GPU
+    512*512， 10% CPU，42% GPU，
+    256*256， 10% CPU，15% GPU，
+
+  对比统计尺寸：
+  粒子数量  256*256，修改统计粒子的面积，这个大了画面精细，收益大
+    1440*1440， 10% CPU，16.6% GPU
+    1024*1024， 10% CPU，15% GPU
+    512*512,   CPU 10%，13% GPU
+
+  修改屏幕绘制的尺寸:
+    粒子数量 256*256，统计尺寸 512*512，这个取决于显示大小
+    1440*1440, 10.3%CPU, 16.4%GPU，
+    1024*1024, CPU 10%, 13% GPU
+*/
 
 #ifndef NDK_SAMPLES_COMPUTESHADERPARTICLES_H
 #define NDK_SAMPLES_COMPUTESHADERPARTICLES_H
@@ -17,8 +35,8 @@
 class ComputeShaderParticles {
   static constexpr int PARTICLES_COUNT_X = 256;  // shader 中要和这个一致
   static constexpr int PARTICLES_COUNT_Y = 256;
-  static constexpr int DISPLAY_X = 1024;
-  static constexpr int DISPLAY_Y = 1024;
+  static constexpr int DISPLAY_X = 1440;
+  static constexpr int DISPLAY_Y = 1440;
   static constexpr float massMin = 0.75;
   static constexpr float massMax = 1.25;
 

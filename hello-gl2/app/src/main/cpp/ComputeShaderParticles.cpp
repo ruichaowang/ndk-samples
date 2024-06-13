@@ -36,8 +36,8 @@ void main() {
 const auto fragmentShaderCode = R"glsl(
 #version 320 es
 precision mediump float;
-#define DISPLAY_X 1024
-#define DISPLAY_Y 1024
+#define DISPLAY_X 1440
+#define DISPLAY_Y 1440
 in vec2 uv;
 out vec4 outColor;
 
@@ -49,9 +49,9 @@ void main() {
   int x = int(uv.x * float(DISPLAY_X));
   int y = int(uv.y * float(DISPLAY_Y));
   int count = particles_count[x][y];
-  float v =  float(count) / 1.0;
+  float v =  float(count) / 1.0;       //这个数据可以改
   particles_count[x][y] = 0;
-  outColor = vec4(v * 0.3 + 0.0, v * 0.5 + 0.0, v * 0.5 + 0.0, 1.0);  //填充颜色,参数按照固定值去设定
+  outColor = vec4(v * 0.7 + 0.0, v * 0.7 + 0.0, v * 0.9 + 0.0, 1.0);  //填充颜色,参数按照固定值去设定
 }
 )glsl";
 
@@ -61,8 +61,8 @@ precision highp float;
 precision highp int;
 #define PARTICLES_COUNT_X 256
 #define PARTICLES_COUNT_Y 256
-#define DISPLAY_X 1024
-#define DISPLAY_Y 1024
+#define DISPLAY_X 1440
+#define DISPLAY_Y 1440
 
 layout(local_size_x = 16, local_size_y = 16) in;
 
@@ -348,8 +348,8 @@ bool ComputeShaderParticles::setupGraphics(int w, int h) {
 
   LOGI("setupGraphics(%d, %d)", w, h);
   // 安卓车机上分辨率为（1886, 1440)，为了展示强行减少到 1440 * 1440，
-  w = 1024;
-  h = 1024;
+  w = 1440;
+  h = 1440;
   window_width = w;
   window_height = h;
 
