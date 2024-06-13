@@ -15,9 +15,6 @@
 
 #include <iostream>
 
-//#include "config.h"
-//static Config config;
-
 static double getCurrentTime() {
   struct timespec now;
   clock_gettime(CLOCK_MONOTONIC, &now);
@@ -29,6 +26,7 @@ const auto vertexShaderCode = R"glsl(
 precision mediump float;
 out vec2 uv;
 in vec2 pos;
+
 void main() {
   gl_Position = vec4(pos.x, pos.y, 0.0, 1.0);
   uv = 0.5 * pos + 0.5;
@@ -36,30 +34,20 @@ void main() {
 )glsl";
 
 const auto fragmentShaderCode = R"glsl(
-
 #version 320 es
 precision mediump float;
+#define DISPLAY_X 1024
+#define DISPLAY_Y 1024
 in vec2 uv;
 out vec4 outColor;
 
-#define PARTICLES_COUNT_X 256
-#define PARTICLES_COUNT_Y 256
-
-layout(std430, binding = 0) buffer SSBO_particles {
-  float particles_position_x[PARTICLES_COUNT_X][PARTICLES_COUNT_Y];
-  float particles_position_y[PARTICLES_COUNT_X][PARTICLES_COUNT_Y];
-  float particles_velocity_x[PARTICLES_COUNT_X][PARTICLES_COUNT_Y];
-  float particles_velocity_y[PARTICLES_COUNT_X][PARTICLES_COUNT_Y];
-  float particles_mass[PARTICLES_COUNT_X][PARTICLES_COUNT_Y];
-};
-
 layout(std430, binding = 1) buffer SSBO_display {
-  int particles_count[1024][1024];
+  int particles_count[DISPLAY_X][DISPLAY_Y];
 };
 
 void main() {
-  int x = int(uv.x * 1024.0);
-  int y = int(uv.y * 1024.0);
+  int x = int(uv.x * float(DISPLAY_X));
+  int y = int(uv.y * float(DISPLAY_Y));
   int count = particles_count[x][y];
   float v =  float(count) / 1.0;
   particles_count[x][y] = 0;
@@ -73,6 +61,8 @@ precision highp float;
 precision highp int;
 #define PARTICLES_COUNT_X 256
 #define PARTICLES_COUNT_Y 256
+#define DISPLAY_X 1024
+#define DISPLAY_Y 1024
 
 layout(local_size_x = 16, local_size_y = 16) in;
 
@@ -85,13 +75,13 @@ layout(std430, binding = 0) buffer SSBO_particles {
 };
 
 layout(std430, binding = 1) buffer SSBO_display {
-  int particles_count[1024][1024];
+  int particles_count[DISPLAY_X][DISPLAY_Y];
 };
 
 uniform float timeSinceLastFrame;
 uniform float m;
 uniform float n;
-float w = 1024.0, h = 1024.0;
+float w = float(DISPLAY_X), h = float(DISPLAY_Y);
 float PI = 3.14159265359;
 
 float rand(vec2 co) {
@@ -99,7 +89,7 @@ float rand(vec2 co) {
 	float b = 78.233;
 	float c = 43758.5453;
 	float dt = dot(co.xy ,vec2(a, b));
-	float sn = mod(dt, 3.14);
+	float sn = mod(dt, PI);
 	return fract(sin(sn) * c);
 }
 
@@ -207,9 +197,9 @@ void main() {
 
         float s = 0.5;
 	if (v.x < 0.0) { v.x = 0.0; v.z *= -s; v.w *= s; }
-	if (v.x > 1024.0) { v.x = 1024.0; v.z *= -s; v.w *= s; }
+	if (v.x > w) { v.x = w; v.z *= -s; v.w *= s; }
 	if (v.y < 0.0) { v.y = 0.0; v.w *= -s; v.z *= s; }
-	if (v.y > 1024.0) { v.y = 1024.0; v.w *= -s; v.z *= s; }
+	if (v.y > h) { v.y = h; v.w *= -s; v.z *= s; }
 
         // 保存结果到 SSBO
         particles_position_x[id.x][id.y] = v.x;
@@ -356,7 +346,8 @@ bool ComputeShaderParticles::setupGraphics(int w, int h) {
   printGLString("Renderer", GL_RENDERER);
   printGLString("Extensions", GL_EXTENSIONS);
 
-  LOGI("setupGraphics(%d, %d)", w, h);  // （1886, 1440)
+  LOGI("setupGraphics(%d, %d)", w, h);
+  // 安卓车机上分辨率为（1886, 1440)，为了展示强行减少到 1440 * 1440，
   w = 1024;
   h = 1024;
   window_width = w;
@@ -439,8 +430,8 @@ void ComputeShaderParticles::createSSBO() {
 
   glGenBuffers(1, &ssbo_display_);
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_display_);
-  glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(ParticlesDisplayBuffer), nullptr,
-               GL_DYNAMIC_COPY);
+  glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(ParticlesDisplayBuffer),
+               nullptr, GL_DYNAMIC_COPY);
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
   checkGlError("init SSBO for display");
 }
@@ -459,7 +450,6 @@ void ComputeShaderParticles::initSSBOParticlesData() {
   }
 
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_particles_);
-//  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssbo_particles_);
   int bufMask = GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT;
   ParticlesBuffer *ssbo_particles_buffer =
       static_cast<ParticlesBuffer *>(glMapBufferRange(
@@ -485,7 +475,6 @@ void ComputeShaderParticles::initSSBOParticlesData() {
 
   glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
   glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
-//  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, 0);
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
   checkGlError("init particle SSBO");
 
@@ -511,11 +500,11 @@ void ComputeShaderParticles::initSSBODisplayData() {
   }
 
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_display_);
-//  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, ssbo_display_);
   int bufMask = GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT;
   ParticlesDisplayBuffer *ssbo_display_buffer =
-      static_cast<ParticlesDisplayBuffer *>(glMapBufferRange(
-          GL_SHADER_STORAGE_BUFFER, 0, sizeof(ParticlesDisplayBuffer), bufMask));
+      static_cast<ParticlesDisplayBuffer *>(
+          glMapBufferRange(GL_SHADER_STORAGE_BUFFER, 0,
+                           sizeof(ParticlesDisplayBuffer), bufMask));
   checkGlError("gl Map display Buffer Range");
   if (!ssbo_display_buffer) {
     LOGE("Could not map the SSBO buffer");
@@ -531,7 +520,6 @@ void ComputeShaderParticles::initSSBODisplayData() {
   glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
   glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-//  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, 0);
   checkGlError("init display SSBO");
 
   LOGI("init ssbo for display done");

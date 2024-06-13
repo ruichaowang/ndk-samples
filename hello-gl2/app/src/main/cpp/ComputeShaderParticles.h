@@ -8,20 +8,21 @@
 
 #include <GLES3/gl32.h>
 #include <android/log.h>
+
 #include <iostream>
 #define LOG_TAG "Test_CS_Particles_"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
 class ComputeShaderParticles {
-
-  static constexpr int PARTICLES_COUNT_X = 256;   // shader 中要和这个一致
+  static constexpr int PARTICLES_COUNT_X = 256;  // shader 中要和这个一致
   static constexpr int PARTICLES_COUNT_Y = 256;
   static constexpr int DISPLAY_X = 1024;
   static constexpr int DISPLAY_Y = 1024;
   static constexpr float massMin = 0.75;
   static constexpr float massMax = 1.25;
 
+  /* 保存的是粒子的属性，位置可以用int 但全用float 是因为方便后续传递进行对齐 */
   struct ParticlesBuffer {
     float particles_position_x[PARTICLES_COUNT_X][PARTICLES_COUNT_Y];
     float particles_position_y[PARTICLES_COUNT_X][PARTICLES_COUNT_Y];
@@ -30,8 +31,9 @@ class ComputeShaderParticles {
     float particles_mass[PARTICLES_COUNT_X][PARTICLES_COUNT_Y];
   };
 
+  /*  这个是图像的分辨率，真正用来显示的每一个点的粒子数， */
   struct ParticlesDisplayBuffer {
-    int particles_count[DISPLAY_X][DISPLAY_Y]; // 真正用来显示的每一个点的粒子数，这个是图像的分辨率
+    int particles_count[DISPLAY_X][DISPLAY_Y];
   };
 
  public:
@@ -54,13 +56,13 @@ class ComputeShaderParticles {
 
   int window_width;
   int window_height;
-  GLuint renderProgramID;                        // Create the gl render program
-  GLuint updateParticlesProgramID;                    // compute shader program
+  GLuint renderProgramID;           // Create the gl render program
+  GLuint updateParticlesProgramID;  // compute shader program
   GLuint ssbo_particles_ = 0;
   GLuint ssbo_display_ = 0;
-  std::atomic <bool> isSSBOReady = false;
-  GLuint vertArray;   //这个最后没有清理
-  GLuint posBuf;     //这个还没有清理
+  std::atomic<bool> isSSBOReady = false;
+  GLuint vertArray;  // 这个最后没有清理
+  GLuint posBuf;     // 这个还没有清理
   double lastFrameTime = 0.0;
   double fpsCountLastTime = 0.0;
   double lastUpdateTime = 0.0;
