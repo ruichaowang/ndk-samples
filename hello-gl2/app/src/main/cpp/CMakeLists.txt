@@ -8,6 +8,8 @@ add_library(gl2jni SHARED
         ComputeShaderParticles.cpp
             gl_code.cpp)
 
+target_include_directories(gl2jni PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/glm)
+
 # add lib dependencies
 target_link_libraries(gl2jni
                       android

@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <time.h>
 
+
 #include <iostream>
 
 static double getCurrentTime() {
@@ -66,12 +67,9 @@ precision highp int;
 
 layout(local_size_x = 16, local_size_y = 16) in;
 
-layout(std430, binding = 0) buffer SSBO_particles {
-  float particles_position_x[PARTICLES_COUNT_X][PARTICLES_COUNT_Y];
-  float particles_position_y[PARTICLES_COUNT_X][PARTICLES_COUNT_Y];
-  float particles_velocity_x[PARTICLES_COUNT_X][PARTICLES_COUNT_Y];
-  float particles_velocity_y[PARTICLES_COUNT_X][PARTICLES_COUNT_Y];
-  float particles_mass[PARTICLES_COUNT_X][PARTICLES_COUNT_Y];
+layout(std140, binding = 0) buffer SSBO_particles {
+  vec4 particles_properties[PARTICLES_COUNT_X][PARTICLES_COUNT_Y];
+  vec4 particles_mass[PARTICLES_COUNT_X][PARTICLES_COUNT_Y];
 };
 
 layout(std430, binding = 1) buffer SSBO_display {
@@ -140,12 +138,8 @@ ivec2 genGradients(ivec2 id) {
 
 void main() {
 	ivec2 id = ivec2(gl_GlobalInvocationID.xy);
-        vec4 v;
-        v.x = particles_position_x[id.x][id.y];
-        v.y = particles_position_y[id.x][id.y];
-        v.z = particles_velocity_x[id.x][id.y];
-        v.w = particles_velocity_y[id.x][id.y];
-        float mass = particles_mass[id.x][id.y];
+        vec4 v = particles_properties[id.x][id.y];
+        float mass = particles_mass[id.x][id.y].x;
 
 	// 更新位置
 	v.x += v.z * timeSinceLastFrame;
@@ -202,10 +196,7 @@ void main() {
 	if (v.y > h) { v.y = h; v.w *= -s; v.z *= s; }
 
         // 保存结果到 SSBO
-        particles_position_x[id.x][id.y] = v.x;
-        particles_position_y[id.x][id.y] = v.y;
-        particles_velocity_x[id.x][id.y] = v.z;
-        particles_velocity_y[id.x][id.y] = v.w;
+        particles_properties[id.x][id.y] = v;
         atomicAdd(particles_count[int(v.x)][int(v.y)], 1);
 }
 )glsl";
@@ -465,11 +456,11 @@ void ComputeShaderParticles::initSSBOParticlesData() {
       auto pos_w = DISPLAY_X * (rand() / float(RAND_MAX));
       auto pos_h = DISPLAY_Y * (rand() / float(RAND_MAX));
       auto mass = massMin + (massMax - massMin) * (float(rand()) / RAND_MAX);
-      ssbo_particles_buffer->particles_position_x[i][j] = pos_w;
-      ssbo_particles_buffer->particles_position_y[i][j] = pos_h;
-      ssbo_particles_buffer->particles_velocity_x[i][j] = 0.0;
-      ssbo_particles_buffer->particles_velocity_y[i][j] = 0.0;
-      ssbo_particles_buffer->particles_mass[i][j] = mass;
+      ssbo_particles_buffer->particles_properties[i][j].x = pos_w;
+      ssbo_particles_buffer->particles_properties[i][j].y = pos_h;
+      ssbo_particles_buffer->particles_properties[i][j].z = 0.0;
+      ssbo_particles_buffer->particles_properties[i][j].w = 0.0;
+      ssbo_particles_buffer->particles_mass[i][j].x = mass;
     }
   }
 

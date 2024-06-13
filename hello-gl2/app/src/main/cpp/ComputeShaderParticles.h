@@ -26,8 +26,9 @@
 
 #include <GLES3/gl32.h>
 #include <android/log.h>
-
 #include <iostream>
+#include "glm.hpp"
+
 #define LOG_TAG "Test_CS_Particles_"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
@@ -40,16 +41,20 @@ class ComputeShaderParticles {
   static constexpr float massMin = 0.75;
   static constexpr float massMax = 1.25;
 
-  /* 保存的是粒子的属性，位置可以用int 但全用float 是因为方便后续传递进行对齐 */
+  /* 保存的粒子的属性，为了跨平台，使用 std 140 16 字节对齐
+   * position x, position y, velocity x，velocity y
+   * mass，pad pad pad
+   * https://www.khronos.org/opengl/wiki/Interface_Block_(GLSL)
+   * https://registry.khronos.org/OpenGL/specs/gl/glspec45.core.pdf#page=159
+   * */
   struct ParticlesBuffer {
-    float particles_position_x[PARTICLES_COUNT_X][PARTICLES_COUNT_Y];
-    float particles_position_y[PARTICLES_COUNT_X][PARTICLES_COUNT_Y];
-    float particles_velocity_x[PARTICLES_COUNT_X][PARTICLES_COUNT_Y];
-    float particles_velocity_y[PARTICLES_COUNT_X][PARTICLES_COUNT_Y];
-    float particles_mass[PARTICLES_COUNT_X][PARTICLES_COUNT_Y];
+    glm::vec4 particles_properties[PARTICLES_COUNT_X][PARTICLES_COUNT_Y];
+    glm::vec4 particles_mass[PARTICLES_COUNT_X][PARTICLES_COUNT_Y];
   };
 
-  /*  这个是图像的分辨率，真正用来显示的每一个点的粒子数， */
+  /*  这个是图像的分辨率，真正用来显示的每一个点的粒子数
+   * 此数据如果是 CPU 传递则使用 int 最方便，如果是直接gpu 传递则需要改成 vec4
+   * */
   struct ParticlesDisplayBuffer {
     int particles_count[DISPLAY_X][DISPLAY_Y];
   };
