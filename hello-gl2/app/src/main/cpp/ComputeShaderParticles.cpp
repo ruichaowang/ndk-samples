@@ -50,7 +50,7 @@ void main() {
   int x = int(uv.x * float(DISPLAY_X));
   int y = int(uv.y * float(DISPLAY_Y));
   int count = particles_count[x][y];
-  float v =  float(count) / 1.0;       //这个数据可以改
+  float v =  float(count) / 2.0;       //这个数据可以改
   particles_count[x][y] = 0;
   outColor = vec4(v * 0.7 + 0.0, v * 0.7 + 0.0, v * 0.9 + 0.0, 1.0);  //填充颜色,参数按照固定值去设定
 }
@@ -60,8 +60,8 @@ static auto updateParticlesComputeShaderCode = R"glsl(
 #version 320 es
 precision highp float;
 precision highp int;
-#define PARTICLES_COUNT_X 256
-#define PARTICLES_COUNT_Y 256
+#define PARTICLES_COUNT_X 512
+#define PARTICLES_COUNT_Y 512
 #define DISPLAY_X 1440
 #define DISPLAY_Y 1440
 
@@ -142,8 +142,8 @@ void main() {
         float mass = particles_mass[id.x][id.y].x;
 
 	// 更新位置
-	v.x += v.z * timeSinceLastFrame;
-	v.y += v.w * timeSinceLastFrame;
+//	v.x += v.z * timeSinceLastFrame;
+//	v.y += v.w * timeSinceLastFrame;
 
 	// 力的方向
 	ivec2 gradient = genGradients(ivec2(int(v.x), int(v.y)));
@@ -151,6 +151,10 @@ void main() {
 	float vibration = chladni_equation(ivec2(int(v.x), int(v.y)));
 	// 求出加速度
 	float c = (timeSinceLastFrame * (vibration * 25.0 * 20.0)) / mass;
+
+        // 更新位置
+        v.x += v.z * timeSinceLastFrame * (vibration + 0.2);
+        v.y += v.w * timeSinceLastFrame * (vibration + 0.2);
 	// 更新下一帧速度
 	v.z += c * float(gradient.x);
 	v.w += c * float(gradient.y);
@@ -177,6 +181,7 @@ void main() {
         }
 
         int count = particles_count[int(v.x)][int(v.y)];
+        atomicAdd(particles_count[int(v.x)][int(v.y)], 1);
 
         float drag1 = 0.8;
         float drag2 = 0.0001 * float(v.z*v.z + v.w*v.w);
@@ -197,7 +202,7 @@ void main() {
 
         // 保存结果到 SSBO
         particles_properties[id.x][id.y] = v;
-        atomicAdd(particles_count[int(v.x)][int(v.y)], 1);
+
 }
 )glsl";
 
@@ -296,6 +301,8 @@ void ComputeShaderParticles::renderFrame() {
     n = (rand() / float(RAND_MAX)) * 10.0;
     printf("m: %f, n: %f\n", m, n);
   }
+
+  LOGI("timeSinceLastFrame: %f", timeSinceLastFrame);
 
   // Update the particles compute shader program
   glUseProgram(updateParticlesProgramID);

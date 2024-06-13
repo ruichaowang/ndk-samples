@@ -34,8 +34,8 @@
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
 class ComputeShaderParticles {
-  static constexpr int PARTICLES_COUNT_X = 256;  // shader 中要和这个一致
-  static constexpr int PARTICLES_COUNT_Y = 256;
+  static constexpr int PARTICLES_COUNT_X = 512;  // shader 中要和这个一致
+  static constexpr int PARTICLES_COUNT_Y = 512;
   static constexpr int DISPLAY_X = 1440;
   static constexpr int DISPLAY_Y = 1440;
   static constexpr float massMin = 0.75;
