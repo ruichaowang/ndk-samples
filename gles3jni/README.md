@@ -7,6 +7,14 @@
 - voxels prediction 来源于：TPVFormer https://github.com/wzzheng/tpvformer
 - M1 Mac 运行的 GL 版本：https://github.com/ruichaowang/Learning_GL/tree/main
 
+## 使用说明
+
+- 为了简单，直接选择把原始的文件推送到 cache 中，并没有从 assets 读取 /data/data/com.android.gles3jni/cache
+``` shell
+adb push camera /data/data/com.android.gles3jni/cache
+adb push cordinate /data/data/com.android.gles3jni/cache
+```
+
 ## 资源消耗
 
 - original sample( 16*16 instance): 8155: 5% CPU, 20~22% GPU(不运行时 16%); 8295:7.6% CPU, 0.75～1%

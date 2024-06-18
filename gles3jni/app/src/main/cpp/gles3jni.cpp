@@ -20,84 +20,70 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
 
 static const char VERTEX_SHADER[] = R"glsl(
-#version 300 es
-layout(location = 0) in vec2 pos;
-layout(location= 1) in vec4 color;
-layout(location= 2) in vec4 scaleRot;
-layout(location= 3) in vec2 offset;
-out vec4 vColor;
+#version 320 es
+precision mediump float;
+
+layout(location = 0) in vec3 aPos;
+layout(location = 1) in vec3 aInstancePos; // 实例位置
+
+out vec3 FragPos;
+out vec4 model_position;
+
+uniform vec3 position;
+uniform mat4 model;
+uniform mat4 view;
+uniform mat4 projection;
+uniform mat4 extrinsic_matrix;
+
 void main() {
-mat2 sr = mat2(scaleRot.xy, scaleRot.zw);
-gl_Position = vec4(sr*pos + offset, 0.0, 1.0);
-vColor = color;
+  FragPos = aPos + aInstancePos; // FragPos = aPos + position;
+  gl_Position = projection * view * vec4(FragPos, 1.0);
+  model_position = extrinsic_matrix * vec4(FragPos, 1.0);
+  model_position.xyz = model_position.xyz / model_position.w;
 }
 )glsl";
 
 static const char FRAGMENT_SHADER[] =
-    "#version 300 es\n"
-    "precision mediump float;\n"
-    "in vec4 vColor;\n"
-    "out vec4 outColor;\n"
-    "void main() {\n"
-    "    outColor = vColor;\n"
-    "}\n";
+    R"glsl(
+#version 320 es
+precision mediump float;
 
+in vec4 model_position;
+out vec3 FragColor;
 
-const Vertex QUAD[4] = {
-    // Square with diagonal < 2 so that it fits in a [-1 .. 1]^2 square
-    // regardless of rotation.
-    {{-0.7f, -0.7f}, {0x00, 0xFF, 0x00}},
-    {{0.7f, -0.7f}, {0x00, 0x00, 0xFF}},
-    {{-0.7f, 0.7f}, {0xFF, 0x00, 0x00}},
-    {{0.7f, 0.7f}, {0xFF, 0xFF, 0xFF}},
-};
+uniform sampler2D camera_texture;
+uniform vec2 focal_lengths;
+uniform vec2 cammera_principal_point;
+uniform int debug_discard;
 
-const float original_vertices_with_positions_only[] = {
-    // positions
-    -0.5f, -0.5f, -0.5f,
-    0.5f, -0.5f, -0.5f,
-    0.5f, 0.5f, -0.5f,
-    0.5f, 0.5f, -0.5f,
-    -0.5f, 0.5f, -0.5f,
-    -0.5f, -0.5f, -0.5f,
+void main() {
+    float pz = model_position.z;
+    if (abs(pz) < 0.00001) {
+        pz = 0.1;
+    }
+    if (model_position.z < 0.0) {
+        discard;
+    }
+    vec2 viewp = vec2(model_position.x/pz, model_position.y/pz);
+    vec2 final_point = viewp * focal_lengths + cammera_principal_point;
 
-    -0.5f, -0.5f, 0.5f,
-    0.5f, -0.5f, 0.5f,
-    0.5f, 0.5f, 0.5f,
-    0.5f, 0.5f, 0.5f,
-    -0.5f, 0.5f, 0.5f,
-    -0.5f, -0.5f, 0.5f,
-
-    -0.5f, 0.5f, 0.5f,
-    -0.5f, 0.5f, -0.5f,
-    -0.5f, -0.5f, -0.5f,
-    -0.5f, -0.5f, -0.5f,
-    -0.5f, -0.5f, 0.5f,
-    -0.5f, 0.5f, 0.5f,
-
-    0.5f, 0.5f, 0.5f,
-    0.5f, 0.5f, -0.5f,
-    0.5f, -0.5f, -0.5f,
-    0.5f, -0.5f, -0.5f,
-    0.5f, -0.5f, 0.5f,
-    0.5f, 0.5f, 0.5f,
-
-    -0.5f, -0.5f, -0.5f,
-    0.5f, -0.5f, -0.5f,
-    0.5f, -0.5f, 0.5f,
-    0.5f, -0.5f, 0.5f,
-    -0.5f, -0.5f, 0.5f,
-    -0.5f, -0.5f, -0.5f,
-
-    -0.5f, 0.5f, -0.5f,
-    0.5f, 0.5f, -0.5f,
-    0.5f, 0.5f, 0.5f,
-    0.5f, 0.5f, 0.5f,
-    -0.5f, 0.5f, 0.5f,
-    -0.5f, 0.5f, -0.5f
-};
+    if (debug_discard == 1) {
+        if (final_point.x < 0.0 ||  final_point.y < 0.0) {
+            discard;
+        }
+        if (final_point.x > 1.0 || final_point.y > 1.0) {
+            discard;
+        }
+    }
+    FragColor = texture(camera_texture, final_point).rgb;
+    // FragColor = texture(camera_texture, TexCoords).rgb;  // 此行为测试使用
+    FragColor = vec3(0.5,0.5,0.5);  // 此行为测试使用
+}
+)glsl";
 
 bool checkGlError(const char* funcName) {
   GLint err = glGetError();
@@ -189,12 +175,8 @@ static void printGlString(const char* name, GLenum s) {
 
 // ----------------------------------------------------------------------------
 
-Renderer::Renderer() : mEglContext(eglGetCurrentContext()), mProgram(0), mVBState(0), mNumInstances(0), mLastFrameNs(0) {
-  memset(mScale, 0, sizeof(mScale));
-  memset(mAngularVelocity, 0, sizeof(mAngularVelocity));
-  memset(mAngles, 0, sizeof(mAngles));
-  for (int i = 0; i < VB_COUNT; i++) mVB[i] = 0;
-}
+Renderer::Renderer()
+    : mEglContext(eglGetCurrentContext()), voxel_program_(0), mVBState(0) {}
 
 Renderer::~Renderer() {
   /* The destructor may be called after the context has already been
@@ -204,63 +186,24 @@ Renderer::~Renderer() {
    * cleaning up after a failed init().
    */
   if (eglGetCurrentContext() != mEglContext) return;
-  glDeleteVertexArrays(1, &mVBState);
-  glDeleteBuffers(VB_COUNT, mVB);
-  glDeleteProgram(mProgram);
+
+  for (auto i = 0; i < CAMERA_COUNTS; i++) {
+    if (camera_textures[i]) {
+      glDeleteTextures(1, &camera_textures[i]);
+      camera_textures[i] = 0;
+    }
+  }
+
+  glDeleteVertexArrays(1, &cube_vao_);
+  glDeleteBuffers(1, &VBO);
+  glDeleteBuffers(1, &instanceVBO);
+  glDeleteProgram(voxel_program_);
 }
 
 void Renderer::resize(int w, int h) {
-  auto offsets = mapOffsetBuf();
-  calcSceneParams(w, h, offsets);
-  unmapOffsetBuf();
-
-  // Auto gives a signed int :-(
-  for (auto i = (unsigned)0; i < mNumInstances; i++) {
-    mAngles[i] = drand48() * TWO_PI;
-    mAngularVelocity[i] = MAX_ROT_SPEED * (2.0 * drand48() - 1.0);
-  }
-
-  mLastFrameNs = 0;
-
+  screen_x_ = w;
+  screen_y_ = h;
   glViewport(0, 0, w, h);
-}
-
-void Renderer::calcSceneParams(unsigned int w, unsigned int h, float* offsets) {
-  // number of cells along the larger screen dimension
-  const float NCELLS_MAJOR = MAX_INSTANCES_PER_SIDE;
-  // cell size in scene space
-  const float CELL_SIZE = 2.0f / NCELLS_MAJOR;
-
-  // Calculations are done in "landscape", i.e. assuming dim[0] >= dim[1].
-  // Only at the end are values put in the opposite order if h > w.
-  const float dim[2] = {fmaxf(w, h), fminf(w, h)};
-  const float aspect[2] = {dim[0] / dim[1], dim[1] / dim[0]};
-  const float scene2clip[2] = {1.0f, aspect[0]};
-  const int ncells[2] = {static_cast<int>(NCELLS_MAJOR),
-                         (int)floorf(NCELLS_MAJOR * aspect[1])};
-
-  float centers[2][MAX_INSTANCES_PER_SIDE];
-  for (int d = 0; d < 2; d++) {
-    auto offset = -ncells[d] / NCELLS_MAJOR;  // -1.0 for d=0
-    for (auto i = 0; i < ncells[d]; i++) {
-      centers[d][i] = scene2clip[d] * (CELL_SIZE * (i + 0.5f) + offset);
-    }
-  }
-
-  int major = w >= h ? 0 : 1;
-  int minor = w >= h ? 1 : 0;
-  // outer product of centers[0] and centers[1]
-  for (int i = 0; i < ncells[0]; i++) {
-    for (int j = 0; j < ncells[1]; j++) {
-      int idx = i * ncells[1] + j;
-      offsets[2 * idx + major] = centers[0][i];
-      offsets[2 * idx + minor] = centers[1][j];
-    }
-  }
-
-  mNumInstances = ncells[0] * ncells[1];
-  mScale[major] = 0.5f * CELL_SIZE * scene2clip[0];
-  mScale[minor] = 0.5f * CELL_SIZE * scene2clip[1];
 }
 
 void Renderer::step() {
@@ -276,38 +219,54 @@ void Renderer::step() {
   last_x_ = xpos;
   last_y_ = ypos;
 
-  // 测试使用touch 的数据进行修改
-  float dt = abs(xoffset) + abs(yoffset) * 0.0001f;
-  ALOGV("dt = %f", dt);
-
-  for (unsigned int i = 0; i < mNumInstances; i++) {
-    mAngles[i] += mAngularVelocity[i] * dt;
-    if (mAngles[i] >= TWO_PI) {
-      mAngles[i] -= TWO_PI;
-    } else if (mAngles[i] <= -TWO_PI) {
-      mAngles[i] += TWO_PI;
-    }
-  }
-
-  float* transforms = mapTransformBuf();
-  for (unsigned int i = 0; i < mNumInstances; i++) {
-    float s = sinf(mAngles[i]);
-    float c = cosf(mAngles[i]);
-    transforms[4 * i + 0] = c * mScale[0];
-    transforms[4 * i + 1] = s * mScale[1];
-    transforms[4 * i + 2] = -s * mScale[0];
-    transforms[4 * i + 3] = c * mScale[1];
-  }
-  unmapTransformBuf();
+  camera.ProcessMouseMovement(xoffset, yoffset);
 }
 
 void Renderer::render() {
+  checkGlError("began draw");
   step();
-
-  glClearColor(0.2f, 0.2f, 0.3f, 1.0f);
+  glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-  draw(mNumInstances);
-  checkGlError("Renderer::render");
+  checkGlError("clear");
+
+  glUseProgram(voxel_program_);
+
+  checkGlError("use program");
+  glUniform1i(glGetUniformLocation(voxel_program_, "camera_texture"), 0);
+  glUniform1i(glGetUniformLocation(voxel_program_, "debug_discard"),
+              debug_discard);
+
+  glUniform3fv(glGetUniformLocation(voxel_program_, "viewPos"), 1,
+               &camera.Position[0]);
+  glm::vec2 focal_length = glm::vec2(intrinsics_[0][0][0] / IMAGE_WIDTH,
+                                     intrinsics_[0][1][1] / IMAGE_HEIGHT);
+  glm::vec2 principal_point = glm::vec2(intrinsics_[0][0][2] / IMAGE_WIDTH,
+                                        intrinsics_[0][1][2] / IMAGE_HEIGHT);
+  glUniform2f(glGetUniformLocation(voxel_program_, "focal_lengths"),
+              focal_length.x, focal_length.y);
+  glUniform2f(glGetUniformLocation(voxel_program_, "cammera_principal_point"),
+              principal_point.x, principal_point.y);
+
+  glm::mat4 projection =
+      glm::perspective(glm::radians(camera.Zoom),
+                       (float)screen_x_ / (float)screen_y_, 0.1f, 100.0f);
+  glm::mat4 view = camera.GetViewMatrix();
+  glUniformMatrix4fv(glGetUniformLocation(voxel_program_, "projection"), 1,
+                     GL_FALSE, &projection[0][0]);
+  glUniformMatrix4fv(glGetUniformLocation(voxel_program_, "view"), 1, GL_FALSE,
+                     &view[0][0]);
+  glUniform1i(glGetUniformLocation(voxel_program_, "camera_texture"), 0);
+  glActiveTexture(GL_TEXTURE0);
+  glBindVertexArray(cube_vao_);
+
+  for (auto i = 0; i < CAMERA_COUNTS; i++) {
+    glBindTexture(GL_TEXTURE_2D, camera_textures[i]);
+    glUniformMatrix4fv(glGetUniformLocation(voxel_program_, "extrinsic_matrix"),
+                       1, GL_FALSE,
+                       reinterpret_cast<const GLfloat*>(&model_mat_[0][0]));
+    glDrawArraysInstanced(GL_TRIANGLES, 0, 36, cube_positions_.size());
+  }
+  checkGlError("draw finished");
 }
 
 /* 可以加读写锁或者用原子数保护，当前省时间没有进行此操作 */
@@ -316,67 +275,64 @@ void Renderer::handleTouch(float x, float y) {
   ypos = y;
 }
 bool Renderer::init() {
-  mProgram = createProgram(VERTEX_SHADER, FRAGMENT_SHADER);
-  if (!mProgram) return false;
+  /* 生成缩放的顶点数据 */
+  float scaled_vertices[sizeof(CUBE_VERTICES) / sizeof(float)];
+  for (size_t i = 0; i < sizeof(CUBE_VERTICES) / sizeof(float); i += 3) {
+    scaled_vertices[i] = CUBE_VERTICES[i] * VOXEL_SIZE;          // x坐标
+    scaled_vertices[i + 1] = CUBE_VERTICES[i + 1] * VOXEL_SIZE;  // y坐标
+    scaled_vertices[i + 2] = CUBE_VERTICES[i + 2] * VOXEL_SIZE;  // z坐标
+  }
 
-  glGenBuffers(VB_COUNT, mVB);
-  glBindBuffer(GL_ARRAY_BUFFER, mVB[VB_INSTANCE]);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(QUAD), &QUAD[0], GL_STATIC_DRAW);
-  glBindBuffer(GL_ARRAY_BUFFER, mVB[VB_SCALEROT]);
-  glBufferData(GL_ARRAY_BUFFER, MAX_INSTANCES * 4 * sizeof(float), NULL,
-               GL_DYNAMIC_DRAW);
-  glBindBuffer(GL_ARRAY_BUFFER, mVB[VB_OFFSET]);
-  glBufferData(GL_ARRAY_BUFFER, MAX_INSTANCES * 2 * sizeof(float), NULL,
+  voxel_program_ = createProgram(VERTEX_SHADER, FRAGMENT_SHADER);  // Done
+  checkGlError("create program");
+
+  glGenVertexArrays(1, &cube_vao_);
+  glGenBuffers(1, &VBO);
+
+  glBindBuffer(GL_ARRAY_BUFFER, VBO);
+  glBufferData(GL_ARRAY_BUFFER, sizeof(scaled_vertices), scaled_vertices,
                GL_STATIC_DRAW);
 
-  glGenVertexArrays(1, &mVBState);
-  glBindVertexArray(mVBState);
+  glBindVertexArray(cube_vao_);
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+  glEnableVertexAttribArray(0);
 
-  glBindBuffer(GL_ARRAY_BUFFER, mVB[VB_INSTANCE]);
-  glVertexAttribPointer(POS_ATTRIB, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex),
-                        (const GLvoid*)offsetof(Vertex, pos));
-  glVertexAttribPointer(COLOR_ATTRIB, 4, GL_UNSIGNED_BYTE, GL_TRUE,
-                        sizeof(Vertex), (const GLvoid*)offsetof(Vertex, rgba));
-  glEnableVertexAttribArray(POS_ATTRIB);
-  glEnableVertexAttribArray(COLOR_ATTRIB);
+  checkGlError("init vao vbo");
 
-  glBindBuffer(GL_ARRAY_BUFFER, mVB[VB_SCALEROT]);
-  glVertexAttribPointer(SCALEROT_ATTRIB, 4, GL_FLOAT, GL_FALSE,
-                        4 * sizeof(float), 0);
-  glEnableVertexAttribArray(SCALEROT_ATTRIB);
-  glVertexAttribDivisor(SCALEROT_ATTRIB, 1);
+  LoadTextures();
 
-  glBindBuffer(GL_ARRAY_BUFFER, mVB[VB_OFFSET]);
-  glVertexAttribPointer(OFFSET_ATTRIB, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float),
-                        0);
-  glEnableVertexAttribArray(OFFSET_ATTRIB);
-  glVertexAttribDivisor(OFFSET_ATTRIB, 1);
+  /* 生成立方体 */
+  GenCubePosition(VOXEL_COORDINATE_PATH, cube_positions_, VOTEX_OFFSET);
 
-  ALOGV("Using OpenGL ES 3.0 renderer");
+  /* 生成内外参 */
+  for (auto i = 0; i < 6; i++) {
+    GenerateModelMat(quaternions_[i], translation_vectors_[i], model_mat_[i],
+                     t2_[i], ExtrinsicOffset);
+  }
+
+  camera.Position = t2_[0]; /* 相机放到前摄位置 */
+
+
   return true;
 }
-float* Renderer::mapOffsetBuf() {
-  glBindBuffer(GL_ARRAY_BUFFER, mVB[VB_OFFSET]);
-  return (float*)glMapBufferRange(
-      GL_ARRAY_BUFFER, 0, MAX_INSTANCES * 2 * sizeof(float),
-      GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT);
-}
-void Renderer::unmapOffsetBuf() {
-  glUnmapBuffer(GL_ARRAY_BUFFER);
-}
-float* Renderer::mapTransformBuf() {
-  glBindBuffer(GL_ARRAY_BUFFER, mVB[VB_SCALEROT]);
-  return (float*)glMapBufferRange(
-      GL_ARRAY_BUFFER, 0, MAX_INSTANCES * 4 * sizeof(float),
-      GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT);
-}
-void Renderer::unmapTransformBuf() {
-  glUnmapBuffer(GL_ARRAY_BUFFER);
-}
+
 void Renderer::draw(unsigned int numInstances) {
-  glUseProgram(mProgram);
+  glUseProgram(voxel_program_);
   glBindVertexArray(mVBState);
   glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, numInstances);
+}
+void Renderer::LoadTextures() {
+  camera_textures[0] = loadTexture(cam_front_path);
+  camera_textures[1] = loadTexture(cam_back_path);
+  camera_textures[2] = loadTexture(cam_front_left_path);
+  camera_textures[3] = loadTexture(cam_front_right_path);
+  camera_textures[4] = loadTexture(cam_back_left_path);
+  camera_textures[5] = loadTexture(cam_back_right_path);
+
+  for (auto i = 0; i < CAMERA_COUNTS; i++) {
+    ALOGI("camera texture %d = %d", i, camera_textures[i]);
+  }
+  checkGlError("LoadTextures");
 }
 
 Renderer* createES3Renderer() {
@@ -387,7 +343,179 @@ Renderer* createES3Renderer() {
   }
   return renderer;
 }
+GLuint loadTexture(const std::string& string_path) {
+  const char* path = string_path.c_str();
+  unsigned int textureID;
+  glGenTextures(1, &textureID);
 
+  int width, height, nrComponents;
+  unsigned char* data = stbi_load(path, &width, &height, &nrComponents, 0);
+  if (data) {
+    GLenum format;
+    if (nrComponents == 1)
+      format = GL_RED;
+    else if (nrComponents == 3)
+      format = GL_RGB;
+    else if (nrComponents == 4)
+      format = GL_RGBA;
+
+    glBindTexture(GL_TEXTURE_2D, textureID);
+    glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format,
+                 GL_UNSIGNED_BYTE, data);
+    glGenerateMipmap(GL_TEXTURE_2D);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
+                    GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    stbi_image_free(data);
+  } else {
+    ALOGE("Texture failed to load at path: ");
+    stbi_image_free(data);
+  }
+
+  return textureID;
+}
+
+std::vector<std::vector<int>> read_csv(const std::string& filename) {
+  std::vector<std::vector<int>> data;
+
+  // 打开文件
+  std::ifstream infile(filename);
+  std::string line;
+
+  // 按行读取
+  while (std::getline(infile, line)) {
+    std::stringstream lineStream(line);
+    std::string cell;
+    std::vector<int> rowData;
+
+    // 以逗号分隔每个字段
+    while (getline(lineStream, cell, ',')) {
+      // 将字符串转换为整数
+      rowData.push_back(std::stoi(cell));
+    }
+
+    data.push_back(rowData);
+  }
+
+  return data;
+}
+
+/* 坐标变化以及调节基准 */
+void GenCubePosition(const std::string& cordinate_path,
+                     std::vector<glm::vec3>& cube_positions, glm::vec3 offset) {
+  auto depth = 30;
+  auto height = 100;
+  auto width = 100;
+  /* 加载 cube 坐标,  */
+  for (int z = 2; z < 8; ++z) {
+    const std::string filename = cordinate_path + std::to_string(z) + ".csv";
+    std::vector<std::vector<int>> data = read_csv(filename);
+    for (int y = 0; y < height; ++y) {
+      for (int x = 0; x < width; ++x) {
+        /* 填充地面 */
+        if (z == 2) {
+          glm::vec3 temp_positon(x * 1.0f, y * 1.0f, z * 1.0f);
+          cube_positions.push_back(temp_positon);
+        }
+
+        /* 添加边缘和立面 */
+        if (y == 0 || y == 99 || x == 0 || x == 99) {
+          glm::vec3 temp_positon(x * 1.0f, y * 1.0f, z * 1.0f);
+          cube_positions.push_back(temp_positon);
+        }
+
+        /* 添加 voxels */
+        if (data[y][x] != 17) {
+          glm::vec3 temp_positon(x * 1.0f, y * 1.0f, z * 1.0f);
+          cube_positions.push_back(temp_positon);
+        }
+      }
+    }
+  }
+
+  std::vector<glm::vec3> wallPositions;
+  // 生成四周墙壁
+  for (int z = 0; z < depth; ++z) {
+    for (int y = 0; y < height; ++y) {
+      // 左右墙壁
+      wallPositions.push_back(glm::vec3(0, y, z));
+      wallPositions.push_back(glm::vec3(width - 1, y, z));
+    }
+    for (int x = 0; x < width; ++x) {
+      // 前后墙壁
+      wallPositions.push_back(glm::vec3(x, 0, z));
+      wallPositions.push_back(glm::vec3(x, height - 1, z));
+    }
+  }
+  cube_positions.insert(cube_positions.end(), wallPositions.begin(),
+                        wallPositions.end());
+
+  // 移除重复的顶点
+  cube_positions.erase(
+      std::unique(cube_positions.begin(), cube_positions.end()),
+      cube_positions.end());
+
+  /* cube 整体移动，以及转化到真实世界坐标 */
+  for (auto& position : cube_positions) {
+    position += offset;
+  }
+  for (auto& position : cube_positions) {
+    position *= VOXEL_SIZE;
+  }
+
+  /* cube z 轴旋转 -90 度 */
+  float rotationAngleDegrees = -90.0f;
+  float rotationAngleRadians = glm::radians(rotationAngleDegrees);
+  glm::mat4 rotationMatrix = glm::rotate(glm::mat4(1.0f), rotationAngleRadians,
+                                         glm::vec3(0.0f, 0.0f, 1.0f));
+  for (auto& position : cube_positions) {
+    position = glm::vec3(rotationMatrix * glm::vec4(position, 1.0f));
+  }
+
+  /* 对y轴反转 */
+  for (auto& position : cube_positions) {
+    position.y = -position.y;
+  }
+}
+void GenerateModelMat(glm::quat& quaternion, glm::vec3& translationVector,
+                      glm::mat4& model_mat, glm::vec3& t2_,
+                      const glm::vec3& ExtrinsicOffset) {
+  glm::quat rotation_final;
+  {
+    float angle_x_degrees = 0.0f;
+    float angle_y_degrees = 0.0f;
+    float angle_z_degrees = 90.0f;
+
+    glm::quat rotation_x =
+        glm::angleAxis(glm::radians(angle_x_degrees), glm::vec3(1, 0, 0));
+    glm::quat rotation_y =
+        glm::angleAxis(glm::radians(angle_y_degrees), glm::vec3(0, 1, 0));
+    glm::quat rotation_z =
+        glm::angleAxis(glm::radians(angle_z_degrees), glm::vec3(0, 0, 1));
+
+    rotation_final = rotation_z * rotation_y * rotation_x;
+  }
+
+  quaternion = rotation_final * quaternion;
+  translationVector += ExtrinsicOffset;
+  glm::mat3 rotation_matrix_c2w = glm::mat3_cast(quaternion);
+  t2_ = rotation_final * translationVector;
+
+  for (int i = 0; i < 3; ++i) {
+    for (int j = 0; j < 3; ++j) {
+      model_mat[i][j] = rotation_matrix_c2w[i][j];
+    }
+  }
+  model_mat[3][0] = t2_[0];
+  model_mat[3][1] = t2_[1];
+  model_mat[3][2] = t2_[2];
+  model_mat[3][3] = 1.0f;
+  model_mat = glm::inverse(model_mat);
+};
 
 // ----------------------------------------------------------------------------
 
