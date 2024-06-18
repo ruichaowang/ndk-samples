@@ -183,35 +183,41 @@ void Renderer::calcSceneParams(unsigned int w, unsigned int h, float* offsets) {
 }
 
 void Renderer::step() {
-  timespec now;
-  clock_gettime(CLOCK_MONOTONIC, &now);
-  auto nowNs = now.tv_sec * 1000000000ull + now.tv_nsec;
+  ALOGV("x,y = %f,%f", xpos, ypos);
 
-  if (mLastFrameNs > 0) {
-    float dt = float(nowNs - mLastFrameNs) * 0.000000001f;
+  if (first_touch_) {
+    last_x_ = xpos;
+    last_y_ = ypos;
+    first_touch_ = false;
+  }
+  float xoffset = -1.0 * (xpos - last_x_);
+  float yoffset = -1.0 * (ypos - last_y_);
+  last_x_ = xpos;
+  last_y_ = ypos;
 
-    for (unsigned int i = 0; i < mNumInstances; i++) {
-      mAngles[i] += mAngularVelocity[i] * dt;
-      if (mAngles[i] >= TWO_PI) {
-        mAngles[i] -= TWO_PI;
-      } else if (mAngles[i] <= -TWO_PI) {
-        mAngles[i] += TWO_PI;
-      }
+  // 测试使用touch 的数据进行修改
+  float dt = abs(xoffset) + abs(yoffset) * 0.0001f;
+  ALOGE("dt = %f", dt);
+
+  for (unsigned int i = 0; i < mNumInstances; i++) {
+    mAngles[i] += mAngularVelocity[i] * dt;
+    if (mAngles[i] >= TWO_PI) {
+      mAngles[i] -= TWO_PI;
+    } else if (mAngles[i] <= -TWO_PI) {
+      mAngles[i] += TWO_PI;
     }
-
-    float* transforms = mapTransformBuf();
-    for (unsigned int i = 0; i < mNumInstances; i++) {
-      float s = sinf(mAngles[i]);
-      float c = cosf(mAngles[i]);
-      transforms[4 * i + 0] = c * mScale[0];
-      transforms[4 * i + 1] = s * mScale[1];
-      transforms[4 * i + 2] = -s * mScale[0];
-      transforms[4 * i + 3] = c * mScale[1];
-    }
-    unmapTransformBuf();
   }
 
-  mLastFrameNs = nowNs;
+  float* transforms = mapTransformBuf();
+  for (unsigned int i = 0; i < mNumInstances; i++) {
+    float s = sinf(mAngles[i]);
+    float c = cosf(mAngles[i]);
+    transforms[4 * i + 0] = c * mScale[0];
+    transforms[4 * i + 1] = s * mScale[1];
+    transforms[4 * i + 2] = -s * mScale[0];
+    transforms[4 * i + 3] = c * mScale[1];
+  }
+  unmapTransformBuf();
 }
 
 void Renderer::render() {
@@ -221,6 +227,12 @@ void Renderer::render() {
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   draw(mNumInstances);
   checkGlError("Renderer::render");
+}
+
+/* 可以加读写锁或者用原子数保护，当前省时间没有进行此操作 */
+void Renderer::handleTouch(float x, float y) {
+  xpos = x;
+  ypos = y;
 }
 
 // ----------------------------------------------------------------------------
@@ -234,6 +246,8 @@ JNIEXPORT void JNICALL Java_com_android_gles3jni_GLES3JNILib_resize(
     JNIEnv* env, jobject obj, jint width, jint height);
 JNIEXPORT void JNICALL Java_com_android_gles3jni_GLES3JNILib_step(JNIEnv* env,
                                                                   jobject obj);
+JNIEXPORT void JNICALL Java_com_android_gles3jni_GLES3JNILib_onTouchEventNative(
+    JNIEnv* env, jobject obj, jint action, jfloat x, jfloat y);
 };
 
 #if !defined(DYNAMIC_ES3)
@@ -255,8 +269,6 @@ JNIEXPORT void JNICALL Java_com_android_gles3jni_GLES3JNILib_init(JNIEnv* env,
   const char* versionStr = (const char*)glGetString(GL_VERSION);
   if (strstr(versionStr, "OpenGL ES 3.") && gl3stubInit()) {
     g_renderer = createES3Renderer();
-  } else if (strstr(versionStr, "OpenGL ES 2.")) {
-    g_renderer = createES2Renderer();
   } else {
     ALOGE("Unsupported OpenGL ES version");
   }
@@ -273,5 +285,15 @@ JNIEXPORT void JNICALL Java_com_android_gles3jni_GLES3JNILib_step(JNIEnv* env,
                                                                   jobject obj) {
   if (g_renderer) {
     g_renderer->render();
+  }
+}
+
+JNIEXPORT void JNICALL Java_com_android_gles3jni_GLES3JNILib_onTouchEventNative(
+    JNIEnv* env, jobject obj, jint action, jfloat x, jfloat y) {
+  // 简单的跨线程，
+  float xpos = static_cast<float>(x);
+  float ypos = static_cast<float>(y);
+  if (g_renderer) {
+    g_renderer->handleTouch(x, y);
   }
 }

@@ -7,6 +7,12 @@
 - voxels prediction 来源于：TPVFormer https://github.com/wzzheng/tpvformer
 - M1 Mac 运行的 GL 版本：https://github.com/ruichaowang/Learning_GL/tree/main
 
+## 资源消耗
+
+- original sample( 16*16 instance): 8155: 5% CPU, 20~22% GPU(不运行时 16%); 8295:7.6% CPU, 0.75～1%
+- 8295 256*256 instance: 15% CPU, 7.14% GPU, 512*512 instance: 37% CPU,26.73 GPU% , 1024*1024 45% CPU, 60% GPU
+- 
+
 ## 原始说明
 
 gles3jni is an Android C++ sample that demonstrates how to use OpenGL ES 3.0

@@ -85,6 +85,7 @@ class Renderer {
   virtual ~Renderer();
   void resize(int w, int h);
   void render();
+  void handleTouch(float x, float y);
 
  protected:
   Renderer();
@@ -97,7 +98,6 @@ class Renderer {
   // the buffer is filled with per-instance scale and rotation transforms.
   virtual float* mapTransformBuf() = 0;
   virtual void unmapTransformBuf() = 0;
-
   virtual void draw(unsigned int numInstances) = 0;
 
  private:
@@ -109,9 +109,15 @@ class Renderer {
   float mAngularVelocity[MAX_INSTANCES];
   uint64_t mLastFrameNs;
   float mAngles[MAX_INSTANCES];
+
+  float xpos = 0.0f;
+  float ypos = 0.0f;
+
+  float last_x_ = 1000.0f;
+  float last_y_ = 1000.0f;
+  bool first_touch_ = true;
 };
 
-extern Renderer* createES2Renderer();
 extern Renderer* createES3Renderer();
 
 #endif  // GLES3JNI_H

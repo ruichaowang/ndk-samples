@@ -19,6 +19,7 @@ package com.android.gles3jni;
 import android.app.Activity;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.MotionEvent;
 import android.view.WindowManager;
 
 import java.io.File;
@@ -41,5 +42,12 @@ public class GLES3JNIActivity extends Activity {
     @Override protected void onResume() {
         super.onResume();
         mView.onResume();
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        // 调用native方法，传递触摸事件参数
+        GLES3JNILib.onTouchEventNative(event.getAction(), event.getX(), event.getY());
+        return super.onTouchEvent(event);
     }
 }
