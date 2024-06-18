@@ -66,6 +66,14 @@
 // non-uniformly scaled to clip space. In practice the transforms are combined
 // so vertices go directly from model to clip space.
 
+#include <EGL/egl.h>
+#include "gles3jni.h"
+
+#define POS_ATTRIB 0
+#define COLOR_ATTRIB 1
+#define SCALEROT_ATTRIB 2
+#define OFFSET_ATTRIB 3
+
 struct Vertex {
   GLfloat pos[2];
   GLubyte rgba[4];
@@ -82,27 +90,31 @@ extern GLuint createProgram(const char* vtxSrc, const char* fragSrc);
 
 class Renderer {
  public:
-  virtual ~Renderer();
+  ~Renderer();
   void resize(int w, int h);
   void render();
   void handleTouch(float x, float y);
+  bool init();
 
- protected:
   Renderer();
 
+ protected:
   // return a pointer to a buffer of MAX_INSTANCES * sizeof(vec2).
   // the buffer is filled with per-instance offsets, then unmapped.
-  virtual float* mapOffsetBuf() = 0;
-  virtual void unmapOffsetBuf() = 0;
+  float* mapOffsetBuf();
+  void unmapOffsetBuf();
   // return a pointer to a buffer of MAX_INSTANCES * sizeof(vec4).
   // the buffer is filled with per-instance scale and rotation transforms.
-  virtual float* mapTransformBuf() = 0;
-  virtual void unmapTransformBuf() = 0;
-  virtual void draw(unsigned int numInstances) = 0;
+  float* mapTransformBuf();
+  void unmapTransformBuf();
+  void draw(unsigned int numInstances);
 
  private:
+  enum { VB_INSTANCE, VB_SCALEROT, VB_OFFSET, VB_COUNT };
   void calcSceneParams(unsigned int w, unsigned int h, float* offsets);
   void step();
+
+
 
   unsigned int mNumInstances;
   float mScale[2];
@@ -116,6 +128,12 @@ class Renderer {
   float last_x_ = 1000.0f;
   float last_y_ = 1000.0f;
   bool first_touch_ = true;
+
+  const EGLContext mEglContext;
+  GLuint mProgram;
+  GLuint mVB[VB_COUNT];
+  GLuint mVBState;
+
 };
 
 extern Renderer* createES3Renderer();

@@ -1,7 +1,7 @@
 # gles3jni
 
 ## 工程说明：
-- 利用了 ES3  instance drawing 等特性来提高渲染效率；
+- 利用了 ES3  instance drawing 等特性来提高渲染效率, 为了方便修改代码删除了虚函数和重载；
 - 目的是 render Voxels and 3D reconstruction with 2D texturing
 - 图像数据，摄像头数据，来源于：NuScenes https://www.nuscenes.org/
 - voxels prediction 来源于：TPVFormer https://github.com/wzzheng/tpvformer
