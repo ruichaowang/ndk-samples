@@ -196,9 +196,9 @@ void main() {
 
         float s = 0.5;
 	if (v.x < 0.0) { v.x = 0.0; v.z *= -s; v.w *= s; }
-	if (v.x > w) { v.x = w; v.z *= -s; v.w *= s; }
+	if (v.x > w -1.0) { v.x = w -1.0; v.z *= -s; v.w *= s; }
 	if (v.y < 0.0) { v.y = 0.0; v.w *= -s; v.z *= s; }
-	if (v.y > h) { v.y = h; v.w *= -s; v.z *= s; }
+	if (v.y > h -1.0) { v.y = h -1.0; v.w *= -s; v.z *= s; }
 
         // 保存结果到 SSBO
         particles_properties[id.x][id.y] = v;

@@ -14,14 +14,6 @@
  * limitations under the License.
  */
 
-/* OpenGL ES 3.2
- * 移植 compute shader 的 particles 到 android native，
- * 修改部分：
- * todo 1： texture 更换为 SSBO
- * todo 2: 还需要添加上点击事件
- * CS 的来源： https://github.com/pgeorgiev98/compute-shader-particles
- * */
-
 #include <jni.h>
 #include "ComputeShaderParticles.h"
 #include <iostream>

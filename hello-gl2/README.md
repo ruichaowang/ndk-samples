@@ -1,6 +1,10 @@
-# Hello GL2
+# Hello GL32
 
-Hello GL2 is an Android C++ sample that draws a triangle using GLES 2.0 API.
+- 此工程原本为 Android C++ sample that draws a triangle using GLES 2.0 API，
+- 现在改成了使用 ES 3.2 API，利用了 Compute shader 进行粒子绘制，为方便并没有修改工程名称
+- CS 代码来源： https://github.com/pgeorgiev98/compute-shader-particles
+- 为了在 ES 上运行，由于rgba32f 兼容性问题，原先有关于 Image 操作的部分被剔除，全部换为SSBO
+- 当前运算上会有bug，粒子过一段时间会消失掉，大概和边界处理上有关系
 
 It uses JNI to do the rendering in C++ over a
 [GLSurfaceView](http://developer.android.com/reference/android/opengl/GLSurfaceView.html)

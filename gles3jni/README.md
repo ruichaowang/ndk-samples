@@ -1,5 +1,14 @@
 # gles3jni
 
+## 工程说明：
+- 利用了 ES3  instance drawing 等特性来提高渲染效率；
+- 目的是 render Voxels and 3D reconstruction with 2D texturing
+- 图像数据，摄像头数据，来源于：NuScenes https://www.nuscenes.org/
+- voxels prediction 来源于：TPVFormer https://github.com/wzzheng/tpvformer
+- M1 Mac 运行的 GL 版本：https://github.com/ruichaowang/Learning_GL/tree/main
+
+## 原始说明
+
 gles3jni is an Android C++ sample that demonstrates how to use OpenGL ES 3.0
 from JNI/native code.
 
