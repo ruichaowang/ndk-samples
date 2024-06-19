@@ -222,13 +222,13 @@ class Renderer {
   float ypos = 1000.0f;
   float last_x_ = 1000.0f;
   float last_y_ = 1000.0f;
-  int screen_x_;
-  int screen_y_;
+  int screen_x_ = 0;
+  int screen_y_ = 0;
 
   const EGLContext mEglContext;
   GLuint voxel_program_, VBO, cube_vao_, instanceVBO;
   GLuint triangle_program_, triangle_vbo_, triangle_vao_;
-  
+
   std::array<GLuint, CAMERA_COUNTS> camera_textures;
   std::array<glm::mat3, CAMERA_COUNTS> intrinsics_ = {
       intrinsics_front,       intrinsics_rear,      intrinsics_front_left,

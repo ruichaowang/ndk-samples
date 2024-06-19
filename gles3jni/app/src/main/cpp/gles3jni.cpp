@@ -29,8 +29,11 @@ precision mediump float;
 
 layout(location = 0) in vec3 aPos;
 
+uniform mat4 view;
+uniform mat4 projection;
 void main() {
-    gl_Position = vec4(aPos, 1.0);
+    //gl_Position = vec4(aPos, 1.0);                     // 不做变换
+    gl_Position = projection * view * vec4(aPos, 1.0); //做变换
 }
 )glsl";
 
@@ -377,7 +380,7 @@ Renderer::Renderer() : mEglContext(eglGetCurrentContext()), voxel_program_(0) {}
 Renderer::~Renderer() {
   if (eglGetCurrentContext() != mEglContext) return;
 
-  if (DEBUG_MODE){
+  if (DEBUG_MODE) {
     releaseTriangleResources();
   } else {
     releaseVoxelResources();
@@ -412,7 +415,6 @@ Renderer* createES3Renderer() {
 
   return renderer;
 }
-
 
 void Renderer::step() {
   ALOGV("x,y = %f,%f", xpos, ypos);
@@ -554,9 +556,28 @@ void Renderer::initTriangle() {
   checkGlError("init triangle");
 }
 void Renderer::drawTriangle() {
+  // camera 计算方法
+  glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 5.0f);     // 后退3单位
+  glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);  // 摄像机面向-Z轴
+  glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);      // 上方为+Y轴
+  glm::mat4 view;
+  view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+  glm::mat4 projection;
+  projection = glm::perspective(
+      glm::radians(45.0f), (float)screen_x_ / (float)screen_y_, 0.1f, 100.0f);
+
+  // 绘制部分
   glClearColor(0.5f, 0.5f, 0.1f, 1.0f);
   glClear(GL_COLOR_BUFFER_BIT);
   glUseProgram(triangle_program_);
+
+  // set camera
+  unsigned int viewLoc = glGetUniformLocation(triangle_program_, "view");
+  unsigned int projLoc = glGetUniformLocation(triangle_program_, "projection");
+  glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
+  glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
+
+  // draw
   glBindVertexArray(triangle_vao_);
   glDrawArrays(GL_TRIANGLES, 0, 3);
   checkGlError("draw triangle finished");
