@@ -68,7 +68,7 @@ easily change this Kotlin example into a Java example.
 ```
 # Kotlin
 companion object {
-    init {
+    initVoxelResources {
         System.loadLibrary("orderfiledemo")
     }
 }

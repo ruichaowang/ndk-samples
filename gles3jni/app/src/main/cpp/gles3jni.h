@@ -18,20 +18,21 @@
 #define GLES3JNI_H 1
 
 #include <EGL/egl.h>
-#include "gles3jni.h"
+#include <android/log.h>
+#include <math.h>
+
+#include <array>
+#include <fstream>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtc/type_ptr.hpp>
-
-#include <android/log.h>
-#include <math.h>
-#include <array>
-#include <vector>
-#include <fstream>
-#include <sstream>
 #include <iostream>
+#include <sstream>
+#include <vector>
+
 #include "camera.h"
+#include "gles3jni.h"
 
 #if DYNAMIC_ES3
 #include "gl3stub.h"
@@ -63,89 +64,36 @@
 // Types, functions, and data used by both ES2 and ES3 renderers.
 // Defined in gles3jni.cpp.
 
-#define MAX_INSTANCES_PER_SIDE 16
-#define MAX_INSTANCES (MAX_INSTANCES_PER_SIDE * MAX_INSTANCES_PER_SIDE)
-#define TWO_PI (2.0 * M_PI)
-#define MAX_ROT_SPEED (0.3 * TWO_PI)
+// 由于当前绘制不出来东西， 先画一个三角形确认原因
 
-// This demo uses three coordinate spaces:
-// - The model (a quad) is in a [-1 .. 1]^2 space
-// - Scene space is either
-//    landscape: [-1 .. 1] x [-1/(2*w/h) .. 1/(2*w/h)]
-//    portrait:  [-1/(2*h/w) .. 1/(2*h/w)] x [-1 .. 1]
-// - Clip space in OpenGL is [-1 .. 1]^2
-//
-// Conceptually, the quads are rotated in model space, then scaled (uniformly)
-// and translated to place them in scene space. Scene space is then
-// non-uniformly scaled to clip space. In practice the transforms are combined
-// so vertices go directly from model to clip space.
-#define POS_ATTRIB 0
-#define COLOR_ATTRIB 1
-#define SCALEROT_ATTRIB 2
-#define OFFSET_ATTRIB 3
-
-struct Vertex {
-  GLfloat pos[2];
-  GLubyte rgba[4];
-};
-extern const Vertex QUAD[4];
-
-const Vertex QUAD[4] = {
-    // Square with diagonal < 2 so that it fits in a [-1 .. 1]^2 square
-    // regardless of rotation.
-    {{-0.7f, -0.7f}, {0x00, 0xFF, 0x00}},
-    {{0.7f, -0.7f}, {0x00, 0x00, 0xFF}},
-    {{-0.7f, 0.7f}, {0xFF, 0x00, 0x00}},
-    {{0.7f, 0.7f}, {0xFF, 0xFF, 0xFF}},
+const GLfloat triangleVertices[] = {
+    0.0f,  1.0f,  0.0f,  // 顶点
+    -1.0f, -1.0f, 0.0f,  // 左下角
+    1.0f,  -1.0f, 0.0f   // 右下角
 };
 
-const float CUBE_VERTICES[] = {
+const GLfloat CUBE_VERTICES[] = {
     // positions
-    -0.5f, -0.5f, -0.5f,
-    0.5f, -0.5f, -0.5f,
-    0.5f, 0.5f, -0.5f,
-    0.5f, 0.5f, -0.5f,
-    -0.5f, 0.5f, -0.5f,
-    -0.5f, -0.5f, -0.5f,
+    -0.5f, -0.5f, -0.5f, 0.5f,  -0.5f, -0.5f, 0.5f,  0.5f,  -0.5f,
+    0.5f,  0.5f,  -0.5f, -0.5f, 0.5f,  -0.5f, -0.5f, -0.5f, -0.5f,
 
-    -0.5f, -0.5f, 0.5f,
-    0.5f, -0.5f, 0.5f,
-    0.5f, 0.5f, 0.5f,
-    0.5f, 0.5f, 0.5f,
-    -0.5f, 0.5f, 0.5f,
-    -0.5f, -0.5f, 0.5f,
+    -0.5f, -0.5f, 0.5f,  0.5f,  -0.5f, 0.5f,  0.5f,  0.5f,  0.5f,
+    0.5f,  0.5f,  0.5f,  -0.5f, 0.5f,  0.5f,  -0.5f, -0.5f, 0.5f,
 
-    -0.5f, 0.5f, 0.5f,
-    -0.5f, 0.5f, -0.5f,
-    -0.5f, -0.5f, -0.5f,
-    -0.5f, -0.5f, -0.5f,
-    -0.5f, -0.5f, 0.5f,
-    -0.5f, 0.5f, 0.5f,
+    -0.5f, 0.5f,  0.5f,  -0.5f, 0.5f,  -0.5f, -0.5f, -0.5f, -0.5f,
+    -0.5f, -0.5f, -0.5f, -0.5f, -0.5f, 0.5f,  -0.5f, 0.5f,  0.5f,
 
-    0.5f, 0.5f, 0.5f,
-    0.5f, 0.5f, -0.5f,
-    0.5f, -0.5f, -0.5f,
-    0.5f, -0.5f, -0.5f,
-    0.5f, -0.5f, 0.5f,
-    0.5f, 0.5f, 0.5f,
+    0.5f,  0.5f,  0.5f,  0.5f,  0.5f,  -0.5f, 0.5f,  -0.5f, -0.5f,
+    0.5f,  -0.5f, -0.5f, 0.5f,  -0.5f, 0.5f,  0.5f,  0.5f,  0.5f,
 
-    -0.5f, -0.5f, -0.5f,
-    0.5f, -0.5f, -0.5f,
-    0.5f, -0.5f, 0.5f,
-    0.5f, -0.5f, 0.5f,
-    -0.5f, -0.5f, 0.5f,
-    -0.5f, -0.5f, -0.5f,
+    -0.5f, -0.5f, -0.5f, 0.5f,  -0.5f, -0.5f, 0.5f,  -0.5f, 0.5f,
+    0.5f,  -0.5f, 0.5f,  -0.5f, -0.5f, 0.5f,  -0.5f, -0.5f, -0.5f,
 
-    -0.5f, 0.5f, -0.5f,
-    0.5f, 0.5f, -0.5f,
-    0.5f, 0.5f, 0.5f,
-    0.5f, 0.5f, 0.5f,
-    -0.5f, 0.5f, 0.5f,
-    -0.5f, 0.5f, -0.5f
-};
+    -0.5f, 0.5f,  -0.5f, 0.5f,  0.5f,  -0.5f, 0.5f,  0.5f,  0.5f,
+    0.5f,  0.5f,  0.5f,  -0.5f, 0.5f,  0.5f,  -0.5f, 0.5f,  -0.5f};
 
 /* 把车挪到整个模型的中心,调节地面的基准 -2 是推测值 */
-const auto VOTEX_OFFSET = glm::vec3(-50.5f, -50.5f, -2.0f); //?-35
+const auto VOTEX_OFFSET = glm::vec3(-50.5f, -50.5f, -2.0f);  //?-35
 /* 外参的坐标系和车辆坐标系的变化，这个数为推测出来的 */
 const auto ExtrinsicOffset = glm::vec3(-0.0, 1.0, 1.5);
 const auto debug_draw_pano = true;
@@ -155,25 +103,32 @@ const auto IMAGE_HEIGHT = 900.0;
 const float VOXEL_SIZE = 1.024f;
 const int CAMERA_COUNTS = 6;
 const std::string CACHE_PATH = "/data/data/com.android.gles3jni/cache";
-const std::string cam_front_path = CACHE_PATH +
+const std::string cam_front_path =
+    CACHE_PATH +
     "/camera/"
     "n015-2018-10-08-15-36-50+0800__CAM_FRONT__1538984245412460.jpg";
-const auto cam_back_path = CACHE_PATH +
-                           "/camera/"
+const auto cam_back_path =
+    CACHE_PATH +
+    "/camera/"
     "n015-2018-10-08-15-36-50+0800__CAM_BACK__1538984245437525.jpg";
-const auto cam_front_left_path = CACHE_PATH +
-                                 "/camera/"
+const auto cam_front_left_path =
+    CACHE_PATH +
+    "/camera/"
     "n015-2018-10-08-15-36-50+0800__CAM_FRONT_LEFT__1538984245404844.jpg";
-const auto cam_front_right_path = CACHE_PATH +
-                                  "/camera/"
+const auto cam_front_right_path =
+    CACHE_PATH +
+    "/camera/"
     "n015-2018-10-08-15-36-50+0800__CAM_FRONT_RIGHT__1538984245420339.jpg";
-const auto cam_back_left_path = CACHE_PATH +
-                                "/camera/"
+const auto cam_back_left_path =
+    CACHE_PATH +
+    "/camera/"
     "n015-2018-10-08-15-36-50+0800__CAM_BACK_LEFT__1538984245447423.jpg";
-const auto cam_back_right_path = CACHE_PATH +
-                                 "/camera/"
+const auto cam_back_right_path =
+    CACHE_PATH +
+    "/camera/"
     "n015-2018-10-08-15-36-50+0800__CAM_BACK_RIGHT__1538984245427893.jpg";
-const auto VOXEL_COORDINATE_PATH = "/data/data/com.android.gles3jni/cache/cordinate/slice_";
+const auto VOXEL_COORDINATE_PATH =
+    "/data/data/com.android.gles3jni/cache/cordinate/slice_";
 
 const auto intrinsics_front =
     glm::mat3(1266.417203046554, 0.0, 816.2670197447984, 0.0, 1266.417203046554,
@@ -228,10 +183,12 @@ const auto quaternion_back_right =
 const auto translation_vectors_back_right =
     glm::vec3(1.0148780988, -0.480568219723, 1.56239545128);
 
+const auto DEBUG_MODE = true;
+
 // returns true if a GL error occurred
-bool checkGlError(const char* funcName);
-GLuint createShader(GLenum shaderType, const char* src);
-GLuint createProgram(const char* vtxSrc, const char* fragSrc);
+bool checkGlError(const char *funcName);
+GLuint createShader(GLenum shaderType, const char *src);
+GLuint createProgram(const char *vtxSrc, const char *fragSrc);
 GLuint loadTexture(const std::string &string_path);
 std::vector<std::vector<int>> read_csv(const std::string &filename);
 void GenCubePosition(const std::string &cordinate_path,
@@ -239,7 +196,7 @@ void GenCubePosition(const std::string &cordinate_path,
 void GenerateModelMat(glm::quat &quaternion, glm::vec3 &translationVector,
                       glm::mat4 &model_mat, glm::vec3 &t2_,
                       const glm::vec3 &ExtrinsicOffset);
-    // ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
 // Interface to the ES2 and ES3 renderers, used by JNI code.
 
 class Renderer {
@@ -248,36 +205,30 @@ class Renderer {
   void resize(int w, int h);
   void render();
   void handleTouch(float x, float y);
-  bool init();
-
+  bool initVoxelResources();
+  void initTriangle();
   Renderer();
-
- protected:
-  // return a pointer to a buffer of MAX_INSTANCES * sizeof(vec2).
-  // the buffer is filled with per-instance offsets, then unmapped.
-  void draw(unsigned int numInstances);
 
  private:
   enum { VB_INSTANCE, VB_SCALEROT, VB_OFFSET, VB_COUNT };
   void step();
   void LoadTextures();
+  void drawTriangle();
+  void drawVoxels();
+  void releaseVoxelResources();
+  void releaseTriangleResources();
 
-  float xpos = 0.0f;
-  float ypos = 0.0f;
-
+  float xpos = 1000.0f;
+  float ypos = 1000.0f;
   float last_x_ = 1000.0f;
   float last_y_ = 1000.0f;
-  bool first_touch_ = true;
-
   int screen_x_;
   int screen_y_;
 
   const EGLContext mEglContext;
-  GLuint voxel_program_;
-  GLuint mVB[VB_COUNT];
-  GLuint mVBState;
-
-  GLuint VBO, cube_vao_, instanceVBO;
+  GLuint voxel_program_, VBO, cube_vao_, instanceVBO;
+  GLuint triangle_program_, triangle_vbo_, triangle_vao_;
+  
   std::array<GLuint, CAMERA_COUNTS> camera_textures;
   std::array<glm::mat3, CAMERA_COUNTS> intrinsics_ = {
       intrinsics_front,       intrinsics_rear,      intrinsics_front_left,
@@ -296,6 +247,6 @@ class Renderer {
   Camera camera;
 };
 
-extern Renderer* createES3Renderer();
+extern Renderer *createES3Renderer();
 
 #endif  // GLES3JNI_H

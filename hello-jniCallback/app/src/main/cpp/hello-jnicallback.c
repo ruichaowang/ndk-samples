@@ -158,7 +158,7 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
   g_ctx.jniHelperClz = (*env)->NewGlobalRef(env, clz);
 
   jmethodID jniHelperCtor =
-      (*env)->GetMethodID(env, g_ctx.jniHelperClz, "<init>", "()V");
+      (*env)->GetMethodID(env, g_ctx.jniHelperClz, "<initVoxelResources>", "()V");
   jobject handler = (*env)->NewObject(env, g_ctx.jniHelperClz, jniHelperCtor);
   g_ctx.jniHelperObj = (*env)->NewGlobalRef(env, handler);
   queryRuntimeInfo(env, g_ctx.jniHelperObj);

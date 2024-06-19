@@ -232,7 +232,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prevInstance,
     if (!RegisterClass(&wc))
         return FALSE;
 
-    // init instance
+    // initVoxelResources instance
     windowStyle = WS_CLIPSIBLINGS | WS_CLIPCHILDREN | WS_VISIBLE;
 #ifdef UNDER_CE
     sWindowWidth = GetSystemMetrics(SM_CXSCREEN);

@@ -270,14 +270,14 @@ bool NativeEngine::HandleInput(AInputEvent *event) {
 bool NativeEngine::InitDisplay() {
   if (mEglDisplay != EGL_NO_DISPLAY) {
     // nothing to do
-    LOGD("NativeEngine: no need to init display (already had one).");
+    LOGD("NativeEngine: no need to initVoxelResources display (already had one).");
     return true;
   }
 
   LOGD("NativeEngine: initializing display.");
   mEglDisplay = eglGetDisplay(EGL_DEFAULT_DISPLAY);
   if (EGL_FALSE == eglInitialize(mEglDisplay, 0, 0)) {
-    LOGE("NativeEngine: failed to init display, error %d", eglGetError());
+    LOGE("NativeEngine: failed to initVoxelResources display, error %d", eglGetError());
     return false;
   }
   return true;
@@ -289,7 +289,7 @@ bool NativeEngine::InitSurface() {
 
   if (mEglSurface != EGL_NO_SURFACE) {
     // nothing to do
-    LOGD("NativeEngine: no need to init surface (already had one).");
+    LOGD("NativeEngine: no need to initVoxelResources surface (already had one).");
     return true;
   }
 
@@ -336,7 +336,7 @@ bool NativeEngine::InitContext() {
 
   if (mEglContext != EGL_NO_CONTEXT) {
     // nothing to do
-    LOGD("NativeEngine: no need to init context (already had one).");
+    LOGD("NativeEngine: no need to initVoxelResources context (already had one).");
     return true;
   }
 

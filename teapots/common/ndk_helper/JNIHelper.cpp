@@ -85,7 +85,7 @@ void JNIHelper::Init(ANativeActivity* activity, const char* helper_class_name) {
   helper.jni_helper_java_class_ = (jclass)env->NewGlobalRef(cls);
 
   jmethodID constructor =
-      env->GetMethodID(helper.jni_helper_java_class_, "<init>",
+      env->GetMethodID(helper.jni_helper_java_class_, "<initVoxelResources>",
                        "(Landroid/app/NativeActivity;)V");
 
   helper.jni_helper_java_ref_ = env->NewObject(helper.jni_helper_java_class_,
@@ -133,7 +133,7 @@ bool JNIHelper::ReadFile(const char* fileName,
                          std::vector<uint8_t>* buffer_ref) {
   if (activity_ == NULL) {
     LOGI(
-        "JNIHelper has not been initialized.Call init() to initialize the "
+        "JNIHelper has not been initialized.Call initVoxelResources() to initialize the "
         "helper");
     return false;
   }
@@ -196,7 +196,7 @@ bool JNIHelper::ReadFile(const char* fileName,
 std::string JNIHelper::GetExternalFilesDir() {
   if (activity_ == NULL) {
     LOGI(
-        "JNIHelper has not been initialized. Call init() to initialize the "
+        "JNIHelper has not been initialized. Call initVoxelResources() to initialize the "
         "helper");
     return std::string("");
   }
@@ -220,7 +220,7 @@ uint32_t JNIHelper::LoadTexture(const char* file_name, int32_t* outWidth,
                                 int32_t* outHeight, bool* hasAlpha) {
   if (activity_ == NULL) {
     LOGI(
-        "JNIHelper has not been initialized. Call init() to initialize the "
+        "JNIHelper has not been initialized. Call initVoxelResources() to initialize the "
         "helper");
     return 0;
   }
@@ -286,7 +286,7 @@ uint32_t JNIHelper::LoadCubemapTexture(const char* file_name,
                                        bool* hasAlpha) {
   if (activity_ == NULL) {
     LOGI(
-        "JNIHelper has not been initialized. Call init() to initialize the "
+        "JNIHelper has not been initialized. Call initVoxelResources() to initialize the "
         "helper");
     return 0;
   }
@@ -338,7 +338,7 @@ jobject JNIHelper::LoadImage(const char* file_name, int32_t* outWidth,
                              int32_t* outHeight, bool* hasAlpha) {
   if (activity_ == NULL) {
     LOGI(
-        "JNIHelper has not been initialized. Call init() to initialize the "
+        "JNIHelper has not been initialized. Call initVoxelResources() to initialize the "
         "helper");
     return 0;
   }
@@ -392,7 +392,7 @@ jobject JNIHelper::LoadImage(const char* file_name, int32_t* outWidth,
 std::string JNIHelper::ConvertString(const char* str, const char* encode) {
   if (activity_ == NULL) {
     LOGI(
-        "JNIHelper has not been initialized. Call init() to initialize the "
+        "JNIHelper has not been initialized. Call initVoxelResources() to initialize the "
         "helper");
     return std::string("");
   }
@@ -438,7 +438,7 @@ std::string JNIHelper::ConvertString(const char* str, const char* encode) {
 std::string JNIHelper::GetStringResource(const std::string& resourceName) {
   if (activity_ == NULL) {
     LOGI(
-        "JNIHelper has not been initialized. Call init() to initialize the "
+        "JNIHelper has not been initialized. Call initVoxelResources() to initialize the "
         "helper");
     return std::string("");
   }
@@ -467,7 +467,7 @@ std::string JNIHelper::GetStringResource(const std::string& resourceName) {
 int32_t JNIHelper::GetNativeAudioBufferSize() {
   if (activity_ == NULL) {
     LOGI(
-        "JNIHelper has not been initialized. Call init() to initialize the "
+        "JNIHelper has not been initialized. Call initVoxelResources() to initialize the "
         "helper");
     return 0;
   }
@@ -482,7 +482,7 @@ int32_t JNIHelper::GetNativeAudioBufferSize() {
 int32_t JNIHelper::GetNativeAudioSampleRate() {
   if (activity_ == NULL) {
     LOGI(
-        "JNIHelper has not been initialized. Call init() to initialize the "
+        "JNIHelper has not been initialized. Call initVoxelResources() to initialize the "
         "helper");
     return 0;
   }
@@ -518,7 +518,7 @@ jclass JNIHelper::RetrieveClass(JNIEnv* jni, const char* class_name) {
 jstring JNIHelper::GetExternalFilesDirJString(JNIEnv* env) {
   if (activity_ == NULL) {
     LOGI(
-        "JNIHelper has not been initialized. Call init() to initialize the "
+        "JNIHelper has not been initialized. Call initVoxelResources() to initialize the "
         "helper");
     return NULL;
   }
@@ -552,7 +552,7 @@ jobject JNIHelper::CallObjectMethod(const char* strMethodName,
                                     const char* strSignature, ...) {
   if (activity_ == NULL) {
     LOGI(
-        "JNIHelper has not been initialized. Call init() to initialize the "
+        "JNIHelper has not been initialized. Call initVoxelResources() to initialize the "
         "helper");
     return NULL;
   }
@@ -577,7 +577,7 @@ void JNIHelper::CallVoidMethod(const char* strMethodName,
                                const char* strSignature, ...) {
   if (activity_ == NULL) {
     LOGI(
-        "JNIHelper has not been initialized. Call init() to initialize the "
+        "JNIHelper has not been initialized. Call initVoxelResources() to initialize the "
         "helper");
     return;
   }
@@ -601,7 +601,7 @@ jobject JNIHelper::CallObjectMethod(jobject object, const char* strMethodName,
                                     const char* strSignature, ...) {
   if (activity_ == NULL) {
     LOGI(
-        "JNIHelper has not been initialized. Call init() to initialize the "
+        "JNIHelper has not been initialized. Call initVoxelResources() to initialize the "
         "helper");
     return NULL;
   }
@@ -627,7 +627,7 @@ void JNIHelper::CallVoidMethod(jobject object, const char* strMethodName,
                                const char* strSignature, ...) {
   if (activity_ == NULL) {
     LOGI(
-        "JNIHelper has not been initialized. Call init() to initialize the "
+        "JNIHelper has not been initialized. Call initVoxelResources() to initialize the "
         "helper");
     return;
   }
@@ -654,7 +654,7 @@ float JNIHelper::CallFloatMethod(jobject object, const char* strMethodName,
   float f = 0.f;
   if (activity_ == NULL) {
     LOGI(
-        "JNIHelper has not been initialized. Call init() to initialize the "
+        "JNIHelper has not been initialized. Call initVoxelResources() to initialize the "
         "helper");
     return f;
   }
@@ -680,7 +680,7 @@ int32_t JNIHelper::CallIntMethod(jobject object, const char* strMethodName,
   int32_t i = 0;
   if (activity_ == NULL) {
     LOGI(
-        "JNIHelper has not been initialized. Call init() to initialize the "
+        "JNIHelper has not been initialized. Call initVoxelResources() to initialize the "
         "helper");
     return i;
   }
@@ -706,7 +706,7 @@ bool JNIHelper::CallBooleanMethod(jobject object, const char* strMethodName,
   bool b;
   if (activity_ == NULL) {
     LOGI(
-        "JNIHelper has not been initialized. Call init() to initialize the "
+        "JNIHelper has not been initialized. Call initVoxelResources() to initialize the "
         "helper");
     return false;
   }
@@ -731,7 +731,7 @@ jobject JNIHelper::CreateObject(const char* class_name) {
   JNIEnv* env = AttachCurrentThread();
 
   jclass cls = env->FindClass(class_name);
-  jmethodID constructor = env->GetMethodID(cls, "<init>", "()V");
+  jmethodID constructor = env->GetMethodID(cls, "<initVoxelResources>", "()V");
 
   jobject obj = env->NewObject(cls, constructor);
   jobject objGlobal = env->NewGlobalRef(obj);

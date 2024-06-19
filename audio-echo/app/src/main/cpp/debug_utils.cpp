@@ -87,7 +87,7 @@ FILE* AndroidLog::openFile() {
 void AndroidLog::logTime() {
   if (prevTick_ == static_cast<uint64_t>(0)) {
     /*
-     * init counter, bypass the first one
+     * initVoxelResources counter, bypass the first one
      */
     prevTick_ = getCurrentTicks();
     return;

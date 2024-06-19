@@ -23,6 +23,29 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
+static const char VERTEX_SHADER_TRIANGLE[] = R"glsl(
+#version 320 es
+precision mediump float;
+
+layout(location = 0) in vec3 aPos;
+
+void main() {
+    gl_Position = vec4(aPos, 1.0);
+}
+)glsl";
+
+static const char FRAGMENT_SHADER_TRIANGLE[] =
+    R"glsl(
+#version 320 es
+precision mediump float;
+
+out vec4 FragColor;
+
+void main() {
+    FragColor = vec4(1.0, 0.5, 0.2, 1.0);  // 橙色
+}
+)glsl";
+
 static const char VERTEX_SHADER[] = R"glsl(
 #version 320 es
 precision mediump float;
@@ -173,176 +196,6 @@ static void printGlString(const char* name, GLenum s) {
   ALOGV("GL %s: %s\n", name, v);
 }
 
-// ----------------------------------------------------------------------------
-
-Renderer::Renderer()
-    : mEglContext(eglGetCurrentContext()), voxel_program_(0), mVBState(0) {}
-
-Renderer::~Renderer() {
-  /* The destructor may be called after the context has already been
-   * destroyed, in which case our objects have already been destroyed.
-   *
-   * If the context exists, it must be current. This only happens when we're
-   * cleaning up after a failed init().
-   */
-  if (eglGetCurrentContext() != mEglContext) return;
-
-  for (auto i = 0; i < CAMERA_COUNTS; i++) {
-    if (camera_textures[i]) {
-      glDeleteTextures(1, &camera_textures[i]);
-      camera_textures[i] = 0;
-    }
-  }
-
-  glDeleteVertexArrays(1, &cube_vao_);
-  glDeleteBuffers(1, &VBO);
-  glDeleteBuffers(1, &instanceVBO);
-  glDeleteProgram(voxel_program_);
-}
-
-void Renderer::resize(int w, int h) {
-  screen_x_ = w;
-  screen_y_ = h;
-  glViewport(0, 0, w, h);
-}
-
-void Renderer::step() {
-  ALOGV("x,y = %f,%f", xpos, ypos);
-
-  if (first_touch_) {
-    last_x_ = xpos;
-    last_y_ = ypos;
-    first_touch_ = false;
-  }
-  float xoffset = -1.0 * (xpos - last_x_);
-  float yoffset = -1.0 * (ypos - last_y_);
-  last_x_ = xpos;
-  last_y_ = ypos;
-
-  camera.ProcessMouseMovement(xoffset, yoffset);
-}
-
-void Renderer::render() {
-  checkGlError("began draw");
-  step();
-  glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-  checkGlError("clear");
-
-  glUseProgram(voxel_program_);
-
-  checkGlError("use program");
-  glUniform1i(glGetUniformLocation(voxel_program_, "camera_texture"), 0);
-  glUniform1i(glGetUniformLocation(voxel_program_, "debug_discard"),
-              debug_discard);
-
-  glUniform3fv(glGetUniformLocation(voxel_program_, "viewPos"), 1,
-               &camera.Position[0]);
-  glm::vec2 focal_length = glm::vec2(intrinsics_[0][0][0] / IMAGE_WIDTH,
-                                     intrinsics_[0][1][1] / IMAGE_HEIGHT);
-  glm::vec2 principal_point = glm::vec2(intrinsics_[0][0][2] / IMAGE_WIDTH,
-                                        intrinsics_[0][1][2] / IMAGE_HEIGHT);
-  glUniform2f(glGetUniformLocation(voxel_program_, "focal_lengths"),
-              focal_length.x, focal_length.y);
-  glUniform2f(glGetUniformLocation(voxel_program_, "cammera_principal_point"),
-              principal_point.x, principal_point.y);
-
-  glm::mat4 projection =
-      glm::perspective(glm::radians(camera.Zoom),
-                       (float)screen_x_ / (float)screen_y_, 0.1f, 100.0f);
-  glm::mat4 view = camera.GetViewMatrix();
-  glUniformMatrix4fv(glGetUniformLocation(voxel_program_, "projection"), 1,
-                     GL_FALSE, &projection[0][0]);
-  glUniformMatrix4fv(glGetUniformLocation(voxel_program_, "view"), 1, GL_FALSE,
-                     &view[0][0]);
-  glUniform1i(glGetUniformLocation(voxel_program_, "camera_texture"), 0);
-  glActiveTexture(GL_TEXTURE0);
-  glBindVertexArray(cube_vao_);
-
-  for (auto i = 0; i < CAMERA_COUNTS; i++) {
-    glBindTexture(GL_TEXTURE_2D, camera_textures[i]);
-    glUniformMatrix4fv(glGetUniformLocation(voxel_program_, "extrinsic_matrix"),
-                       1, GL_FALSE,
-                       reinterpret_cast<const GLfloat*>(&model_mat_[0][0]));
-    glDrawArraysInstanced(GL_TRIANGLES, 0, 36, cube_positions_.size());
-  }
-  checkGlError("draw finished");
-}
-
-/* 可以加读写锁或者用原子数保护，当前省时间没有进行此操作 */
-void Renderer::handleTouch(float x, float y) {
-  xpos = x;
-  ypos = y;
-}
-bool Renderer::init() {
-  /* 生成缩放的顶点数据 */
-  float scaled_vertices[sizeof(CUBE_VERTICES) / sizeof(float)];
-  for (size_t i = 0; i < sizeof(CUBE_VERTICES) / sizeof(float); i += 3) {
-    scaled_vertices[i] = CUBE_VERTICES[i] * VOXEL_SIZE;          // x坐标
-    scaled_vertices[i + 1] = CUBE_VERTICES[i + 1] * VOXEL_SIZE;  // y坐标
-    scaled_vertices[i + 2] = CUBE_VERTICES[i + 2] * VOXEL_SIZE;  // z坐标
-  }
-
-  voxel_program_ = createProgram(VERTEX_SHADER, FRAGMENT_SHADER);  // Done
-  checkGlError("create program");
-
-  glGenVertexArrays(1, &cube_vao_);
-  glGenBuffers(1, &VBO);
-
-  glBindBuffer(GL_ARRAY_BUFFER, VBO);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(scaled_vertices), scaled_vertices,
-               GL_STATIC_DRAW);
-
-  glBindVertexArray(cube_vao_);
-  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-  glEnableVertexAttribArray(0);
-
-  checkGlError("init vao vbo");
-
-  LoadTextures();
-
-  /* 生成立方体 */
-  GenCubePosition(VOXEL_COORDINATE_PATH, cube_positions_, VOTEX_OFFSET);
-
-  /* 生成内外参 */
-  for (auto i = 0; i < 6; i++) {
-    GenerateModelMat(quaternions_[i], translation_vectors_[i], model_mat_[i],
-                     t2_[i], ExtrinsicOffset);
-  }
-
-  camera.Position = t2_[0]; /* 相机放到前摄位置 */
-
-
-  return true;
-}
-
-void Renderer::draw(unsigned int numInstances) {
-  glUseProgram(voxel_program_);
-  glBindVertexArray(mVBState);
-  glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, numInstances);
-}
-void Renderer::LoadTextures() {
-  camera_textures[0] = loadTexture(cam_front_path);
-  camera_textures[1] = loadTexture(cam_back_path);
-  camera_textures[2] = loadTexture(cam_front_left_path);
-  camera_textures[3] = loadTexture(cam_front_right_path);
-  camera_textures[4] = loadTexture(cam_back_left_path);
-  camera_textures[5] = loadTexture(cam_back_right_path);
-
-  for (auto i = 0; i < CAMERA_COUNTS; i++) {
-    ALOGI("camera texture %d = %d", i, camera_textures[i]);
-  }
-  checkGlError("LoadTextures");
-}
-
-Renderer* createES3Renderer() {
-  Renderer* renderer = new Renderer;
-  if (!renderer->init()) {
-    delete renderer;
-    return NULL;
-  }
-  return renderer;
-}
 GLuint loadTexture(const std::string& string_path) {
   const char* path = string_path.c_str();
   unsigned int textureID;
@@ -516,6 +369,216 @@ void GenerateModelMat(glm::quat& quaternion, glm::vec3& translationVector,
   model_mat[3][3] = 1.0f;
   model_mat = glm::inverse(model_mat);
 };
+
+// ----------------------------------------------------------------------------
+
+Renderer::Renderer() : mEglContext(eglGetCurrentContext()), voxel_program_(0) {}
+
+Renderer::~Renderer() {
+  if (eglGetCurrentContext() != mEglContext) return;
+
+  if (DEBUG_MODE){
+    releaseTriangleResources();
+  } else {
+    releaseVoxelResources();
+  }
+}
+
+void Renderer::resize(int w, int h) {
+  screen_x_ = w;
+  screen_y_ = h;
+  glViewport(0, 0, w, h);
+}
+
+void Renderer::render() {
+  if (DEBUG_MODE) {
+    drawTriangle();
+  } else {
+    drawVoxels();
+  }
+}
+
+Renderer* createES3Renderer() {
+  Renderer* renderer = new Renderer;
+
+  if (DEBUG_MODE) {
+    renderer->initTriangle();
+  } else {
+    if (!renderer->initVoxelResources()) {
+      delete renderer;
+      return NULL;
+    }
+  }
+
+  return renderer;
+}
+
+
+void Renderer::step() {
+  ALOGV("x,y = %f,%f", xpos, ypos);
+  float xoffset = -1.0 * (xpos - last_x_);
+  float yoffset = -1.0 * (ypos - last_y_);
+  last_x_ = xpos;
+  last_y_ = ypos;
+
+  camera.ProcessMouseMovement(xoffset, yoffset);
+}
+
+/* 可以加读写锁或者用原子数保护，当前省时间没有进行此操作 */
+void Renderer::handleTouch(float x, float y) {
+  xpos = x;
+  ypos = y;
+}
+bool Renderer::initVoxelResources() {
+  /* 生成缩放的顶点数据 */
+  float scaled_vertices[sizeof(CUBE_VERTICES) / sizeof(float)];
+  for (size_t i = 0; i < sizeof(CUBE_VERTICES) / sizeof(float); i += 3) {
+    scaled_vertices[i] = CUBE_VERTICES[i] * VOXEL_SIZE;          // x坐标
+    scaled_vertices[i + 1] = CUBE_VERTICES[i + 1] * VOXEL_SIZE;  // y坐标
+    scaled_vertices[i + 2] = CUBE_VERTICES[i + 2] * VOXEL_SIZE;  // z坐标
+  }
+
+  voxel_program_ = createProgram(VERTEX_SHADER, FRAGMENT_SHADER);
+  checkGlError("create program");
+
+  glGenVertexArrays(1, &cube_vao_);
+  glGenBuffers(1, &VBO);
+
+  glBindBuffer(GL_ARRAY_BUFFER, VBO);
+  glBufferData(GL_ARRAY_BUFFER, sizeof(scaled_vertices), scaled_vertices,
+               GL_STATIC_DRAW);
+
+  glBindVertexArray(cube_vao_);
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+  glEnableVertexAttribArray(0);
+  checkGlError("init Voxel vao vbo");
+
+  glGenBuffers(1, &instanceVBO);
+  glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
+  glBufferData(GL_ARRAY_BUFFER, cube_positions_.size() * sizeof(glm::vec3),
+               &cube_positions_[0], GL_STATIC_DRAW);
+  glEnableVertexAttribArray(1);
+  glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
+  glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+  glVertexAttribDivisor(1, 1);
+  checkGlError("init instanceVBO");
+
+  LoadTextures();
+
+  /* 生成立方体 */
+  GenCubePosition(VOXEL_COORDINATE_PATH, cube_positions_, VOTEX_OFFSET);
+
+  /* 生成内外参 */
+  for (auto i = 0; i < 6; i++) {
+    GenerateModelMat(quaternions_[i], translation_vectors_[i], model_mat_[i],
+                     t2_[i], ExtrinsicOffset);
+  }
+
+  camera.Position = t2_[0]; /* 相机放到前摄位置 */
+
+  return true;
+}
+void Renderer::drawVoxels() {
+  checkGlError("began draw");
+  step();
+  glClearColor(0.8f, 0.1f, 0.1f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  checkGlError("clear");
+
+  glUseProgram(voxel_program_);
+
+  checkGlError("use program");
+  glUniform1i(glGetUniformLocation(voxel_program_, "camera_texture"), 0);
+  glUniform1i(glGetUniformLocation(voxel_program_, "debug_discard"),
+              debug_discard);
+
+  glUniform3fv(glGetUniformLocation(voxel_program_, "viewPos"), 1,
+               &camera.Position[0]);
+  glm::vec2 focal_length = glm::vec2(intrinsics_[0][0][0] / IMAGE_WIDTH,
+                                     intrinsics_[0][1][1] / IMAGE_HEIGHT);
+  glm::vec2 principal_point = glm::vec2(intrinsics_[0][0][2] / IMAGE_WIDTH,
+                                        intrinsics_[0][1][2] / IMAGE_HEIGHT);
+  glUniform2f(glGetUniformLocation(voxel_program_, "focal_lengths"),
+              focal_length.x, focal_length.y);
+  glUniform2f(glGetUniformLocation(voxel_program_, "cammera_principal_point"),
+              principal_point.x, principal_point.y);
+
+  glm::mat4 projection =
+      glm::perspective(glm::radians(camera.Zoom),
+                       (float)screen_x_ / (float)screen_y_, 0.1f, 100.0f);
+  glm::mat4 view = camera.GetViewMatrix();
+  glUniformMatrix4fv(glGetUniformLocation(voxel_program_, "projection"), 1,
+                     GL_FALSE, &projection[0][0]);
+  glUniformMatrix4fv(glGetUniformLocation(voxel_program_, "view"), 1, GL_FALSE,
+                     &view[0][0]);
+  glUniform1i(glGetUniformLocation(voxel_program_, "camera_texture"), 0);
+  glActiveTexture(GL_TEXTURE0);
+  glBindVertexArray(cube_vao_);
+
+  for (auto i = 0; i < CAMERA_COUNTS; i++) {
+    glBindTexture(GL_TEXTURE_2D, camera_textures[i]);
+    glUniformMatrix4fv(glGetUniformLocation(voxel_program_, "extrinsic_matrix"),
+                       1, GL_FALSE,
+                       reinterpret_cast<const GLfloat*>(&model_mat_[0][0]));
+    glDrawArraysInstanced(GL_TRIANGLES, 0, 36, cube_positions_.size());
+  }
+  checkGlError("draw finished");
+}
+
+void Renderer::LoadTextures() {
+  camera_textures[0] = loadTexture(cam_front_path);
+  camera_textures[1] = loadTexture(cam_back_path);
+  camera_textures[2] = loadTexture(cam_front_left_path);
+  camera_textures[3] = loadTexture(cam_front_right_path);
+  camera_textures[4] = loadTexture(cam_back_left_path);
+  camera_textures[5] = loadTexture(cam_back_right_path);
+
+  for (auto i = 0; i < CAMERA_COUNTS; i++) {
+    ALOGI("camera texture %d = %d", i, camera_textures[i]);
+  }
+  checkGlError("LoadTextures");
+}
+void Renderer::initTriangle() {
+  triangle_program_ =
+      createProgram(VERTEX_SHADER_TRIANGLE, FRAGMENT_SHADER_TRIANGLE);
+  glGenVertexArrays(1, &triangle_vao_);
+  glGenBuffers(1, &triangle_vbo_);
+
+  glBindVertexArray(triangle_vao_);
+  glBindBuffer(GL_ARRAY_BUFFER, triangle_vbo_);
+  glBufferData(GL_ARRAY_BUFFER, sizeof(triangleVertices), triangleVertices,
+               GL_STATIC_DRAW);
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+  glEnableVertexAttribArray(0);
+
+  checkGlError("init triangle");
+}
+void Renderer::drawTriangle() {
+  glClearColor(0.5f, 0.5f, 0.1f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT);
+  glUseProgram(triangle_program_);
+  glBindVertexArray(triangle_vao_);
+  glDrawArrays(GL_TRIANGLES, 0, 3);
+  checkGlError("draw triangle finished");
+}
+void Renderer::releaseVoxelResources() {
+  for (auto i = 0; i < CAMERA_COUNTS; i++) {
+    if (camera_textures[i]) {
+      glDeleteTextures(1, &camera_textures[i]);
+      camera_textures[i] = 0;
+    }
+  }
+
+  glDeleteVertexArrays(1, &cube_vao_);
+  glDeleteBuffers(1, &VBO);
+  glDeleteBuffers(1, &instanceVBO);
+  glDeleteProgram(voxel_program_);
+}
+void Renderer::releaseTriangleResources() {
+  glDeleteVertexArrays(1, &triangle_vbo_);
+  glDeleteBuffers(1, &triangle_vao_);
+  glDeleteProgram(triangle_program_);
+}
 
 // ----------------------------------------------------------------------------
 

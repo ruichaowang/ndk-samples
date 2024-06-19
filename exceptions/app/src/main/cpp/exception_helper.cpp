@@ -145,7 +145,7 @@ static int ThrowException(JNIEnv* env, const char* className,
        */
       goto end;
     }
-    jmethodID init = env->GetMethodID(exceptionClass, "<init>", ctorSig);
+    jmethodID init = env->GetMethodID(exceptionClass, "<initVoxelResources>", ctorSig);
     if (init == NULL) {
       __android_log_print(ANDROID_LOG_ERROR, "exception_helper::",
                           "Failed to find constructor for '%s' '%s'", className,

@@ -257,7 +257,7 @@ public class CameraActivity extends NativeActivity
     }
 
     /**
-     * params[] exposure and sensitivity init values in (min, max, curVa) tuple
+     * params[] exposure and sensitivity initVoxelResources values in (min, max, curVa) tuple
      *   0: exposure min
      *   1: exposure max
      *   2: exposure val

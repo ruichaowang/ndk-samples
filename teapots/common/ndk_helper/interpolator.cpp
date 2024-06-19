@@ -37,7 +37,7 @@ void Interpolator::Clear() { list_params_.clear(); }
 Interpolator& Interpolator::Set(const float start, const float dest,
                                 const INTERPOLATOR_TYPE type,
                                 const double duration) {
-  // init the parameters for the interpolation process
+  // initVoxelResources the parameters for the interpolation process
   start_time_ = PerfMonitor::GetCurrentTime();
   dest_time_ = start_time_ + duration;
   type_ = type;

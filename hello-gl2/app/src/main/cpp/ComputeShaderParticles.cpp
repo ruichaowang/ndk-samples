@@ -416,7 +416,7 @@ GLuint ComputeShaderParticles::createComputeShaderProgram(
 void ComputeShaderParticles::createSSBO() {
   LOGI("init_ssbo");
   if (ssbo_particles_ != 0) {
-    LOGI("SSBO already init");
+    LOGI("SSBO already initVoxelResources");
     return;
   }
   glGenBuffers(1, &ssbo_particles_);
@@ -424,14 +424,14 @@ void ComputeShaderParticles::createSSBO() {
   glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(ParticlesBuffer), nullptr,
                GL_DYNAMIC_COPY);
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-  checkGlError("init SSBO for particles");
+  checkGlError("initVoxelResources SSBO for particles");
 
   glGenBuffers(1, &ssbo_display_);
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_display_);
   glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(ParticlesDisplayBuffer),
                nullptr, GL_DYNAMIC_COPY);
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-  checkGlError("init SSBO for display");
+  checkGlError("initVoxelResources SSBO for display");
 }
 void ComputeShaderParticles::releaseSSBO() {
   glDeleteBuffers(1, &ssbo_particles_);
@@ -441,9 +441,9 @@ void ComputeShaderParticles::releaseSSBO() {
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 }
 void ComputeShaderParticles::initSSBOParticlesData() {
-  LOGI("init particles properties");
+  LOGI("initVoxelResources particles properties");
   if (ssbo_particles_ == 0) {
-    LOGE("particles SSBO not init");
+    LOGE("particles SSBO not initVoxelResources");
     return;
   }
 
@@ -474,9 +474,9 @@ void ComputeShaderParticles::initSSBOParticlesData() {
   glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
   glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-  checkGlError("init particle SSBO");
+  checkGlError("initVoxelResources particle SSBO");
 
-  LOGI("init particles properties done");
+  LOGI("initVoxelResources particles properties done");
 }
 void ComputeShaderParticles::genVertexBuffers() {
   glGenVertexArrays(1, &vertArray);
@@ -491,9 +491,9 @@ void ComputeShaderParticles::genVertexBuffers() {
   glEnableVertexAttribArray(posPtr);
 }
 void ComputeShaderParticles::initSSBODisplayData() {
-  LOGI("init display data ");
+  LOGI("initVoxelResources display data ");
   if (ssbo_display_ == 0) {
-    LOGE("ssbo display not init");
+    LOGE("ssbo display not initVoxelResources");
     return;
   }
 
@@ -518,7 +518,7 @@ void ComputeShaderParticles::initSSBODisplayData() {
   glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
   glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-  checkGlError("init display SSBO");
+  checkGlError("initVoxelResources display SSBO");
 
-  LOGI("init ssbo for display done");
+  LOGI("initVoxelResources ssbo for display done");
 }
