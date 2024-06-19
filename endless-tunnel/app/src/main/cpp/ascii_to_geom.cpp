@@ -214,7 +214,7 @@ SimpleGeom *AsciiArtToGeom(const char *art, float scale) {
   }
 
   // create the buffers
-  GEOM_DEBUG("Creating output VBO (%d vertices) and IBO (%d indices).",
+  GEOM_DEBUG("Creating output cube_vbo_ (%d vertices) and IBO (%d indices).",
              vertices, indices);
   SimpleGeom *out = new SimpleGeom(
       new VertexBuf(verticesArray, vertices * sizeof(GLfloat) * VERTICES_STRIDE,

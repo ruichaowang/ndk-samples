@@ -54,7 +54,7 @@ void TeapotRenderer::Init() {
                GL_STATIC_DRAW);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
-  // Create VBO
+  // Create cube_vbo_
   num_vertices_ = sizeof(teapotPositions) / sizeof(teapotPositions[0]) / 3;
   int32_t stride = sizeof(TEAPOT_VERTEX);
   int32_t index = 0;
@@ -143,7 +143,7 @@ void TeapotRenderer::Render(float r, float g, float b) {
   // Feed Projection and Model View matrices to the shaders
   ndk_helper::Mat4 mat_vp = mat_projection_ * mat_view_;
 
-  // Bind the VBO
+  // Bind the cube_vbo_
   glBindBuffer(GL_ARRAY_BUFFER, vbo_);
 
   int32_t iStride = sizeof(TEAPOT_VERTEX);

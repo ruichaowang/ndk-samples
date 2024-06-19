@@ -183,7 +183,7 @@ const auto quaternion_back_right =
 const auto translation_vectors_back_right =
     glm::vec3(1.0148780988, -0.480568219723, 1.56239545128);
 
-const auto DEBUG_MODE = true;
+const auto DEBUG_MODE = 2; // 0 voxels, 1 triangle, 2 cube,
 
 // returns true if a GL error occurred
 bool checkGlError(const char *funcName);
@@ -207,16 +207,18 @@ class Renderer {
   void handleTouch(float x, float y);
   bool initVoxelResources();
   void initTriangle();
+  void initCube();
   Renderer();
 
  private:
-  enum { VB_INSTANCE, VB_SCALEROT, VB_OFFSET, VB_COUNT };
   void step();
   void LoadTextures();
   void drawTriangle();
+  void drawCube();
   void drawVoxels();
   void releaseVoxelResources();
   void releaseTriangleResources();
+  void releaseCubeResources();
 
   float xpos = 1000.0f;
   float ypos = 1000.0f;
@@ -226,8 +228,9 @@ class Renderer {
   int screen_y_ = 0;
 
   const EGLContext mEglContext;
-  GLuint voxel_program_, VBO, cube_vao_, instanceVBO;
+  GLuint voxel_program_, cube_vbo_, cube_vao_, voxel_instance_vbo_;
   GLuint triangle_program_, triangle_vbo_, triangle_vao_;
+  GLuint cube_program_;
 
   std::array<GLuint, CAMERA_COUNTS> camera_textures;
   std::array<glm::mat3, CAMERA_COUNTS> intrinsics_ = {
@@ -244,7 +247,9 @@ class Renderer {
   std::array<glm::mat4, CAMERA_COUNTS> model_mat_;
   /* 定义立方体的位置 */
   std::vector<glm::vec3> cube_positions_ = {};
-  Camera camera;
+  Camera gl_camera_;
+  float Yaw_ = -90.0f; // Yaw is initialized to -90.0 degrees since a yaw of 0.0 results in a direction vector pointing to the right so we initially rotate a bit to the left.
+  float Pitch_ = 0.0f; // 初始俯仰角为0
 };
 
 extern Renderer *createES3Renderer();

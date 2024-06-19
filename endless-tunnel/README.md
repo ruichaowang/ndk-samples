@@ -95,7 +95,7 @@ them.
 
 ### Geometry And Rendering
 
-The game's geometry is represented by VBOs and IBOs. A VBO is represented by the
+The game's geometry is represented by VBOs and IBOs. A cube_vbo_ is represented by the
 VertexBuf class, and an IBO is represented by an IndexBuf. A shader is
 represented by the Shader class, of which TrivialShader is a concrete example.
 

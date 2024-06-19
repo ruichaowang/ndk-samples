@@ -24,7 +24,7 @@ VertexBuf::VertexBuf(GLfloat *geomData, int dataSize, int stride) {
   mColorsOffset = mTexCoordsOffset = 0;
   mCount = dataSize / stride;
 
-  // build VBO
+  // build cube_vbo_
   glGenBuffers(1, &mVbo);
   BindBuffer();
   glBufferData(GL_ARRAY_BUFFER, dataSize, geomData, GL_STATIC_DRAW);

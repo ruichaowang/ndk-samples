@@ -155,7 +155,7 @@ void Shader::BeginRender(VertexBuf *vbuf) {
   // Activate shader
   BindShader();
 
-  // bind geometry's VBO
+  // bind geometry's cube_vbo_
   vbuf->BindBuffer();
 
   // push positions to shader

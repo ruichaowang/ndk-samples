@@ -380,10 +380,12 @@ Renderer::Renderer() : mEglContext(eglGetCurrentContext()), voxel_program_(0) {}
 Renderer::~Renderer() {
   if (eglGetCurrentContext() != mEglContext) return;
 
-  if (DEBUG_MODE) {
-    releaseTriangleResources();
-  } else {
+  if (DEBUG_MODE == 0) {
     releaseVoxelResources();
+  } else if (DEBUG_MODE == 1){
+    releaseTriangleResources();
+  } else if (DEBUG_MODE == 2){
+    releaseCubeResources();
   }
 }
 
@@ -394,36 +396,40 @@ void Renderer::resize(int w, int h) {
 }
 
 void Renderer::render() {
-  if (DEBUG_MODE) {
-    drawTriangle();
-  } else {
+  if (DEBUG_MODE == 0) {
     drawVoxels();
+  } else if (DEBUG_MODE == 1) {
+    drawTriangle();
+  } else if (DEBUG_MODE == 2) {
+    drawCube();
   }
 }
 
 Renderer* createES3Renderer() {
   Renderer* renderer = new Renderer;
 
-  if (DEBUG_MODE) {
-    renderer->initTriangle();
-  } else {
+  if (DEBUG_MODE == 0) {
     if (!renderer->initVoxelResources()) {
       delete renderer;
       return NULL;
     }
+  } else if (DEBUG_MODE == 1) {
+    renderer->initTriangle();
+  } else if (DEBUG_MODE == 2) {
+    renderer->initCube();
   }
 
   return renderer;
 }
 
 void Renderer::step() {
-  ALOGV("x,y = %f,%f", xpos, ypos);
+  ALOGI("x,y = %f,%f", xpos, ypos);
   float xoffset = -1.0 * (xpos - last_x_);
   float yoffset = -1.0 * (ypos - last_y_);
   last_x_ = xpos;
   last_y_ = ypos;
 
-  camera.ProcessMouseMovement(xoffset, yoffset);
+  gl_camera_.ProcessMouseMovement(xoffset, yoffset);
 }
 
 /* 可以加读写锁或者用原子数保护，当前省时间没有进行此操作 */
@@ -431,6 +437,7 @@ void Renderer::handleTouch(float x, float y) {
   xpos = x;
   ypos = y;
 }
+
 bool Renderer::initVoxelResources() {
   /* 生成缩放的顶点数据 */
   float scaled_vertices[sizeof(CUBE_VERTICES) / sizeof(float)];
@@ -444,9 +451,9 @@ bool Renderer::initVoxelResources() {
   checkGlError("create program");
 
   glGenVertexArrays(1, &cube_vao_);
-  glGenBuffers(1, &VBO);
+  glGenBuffers(1, &cube_vbo_);
 
-  glBindBuffer(GL_ARRAY_BUFFER, VBO);
+  glBindBuffer(GL_ARRAY_BUFFER, cube_vbo_);
   glBufferData(GL_ARRAY_BUFFER, sizeof(scaled_vertices), scaled_vertices,
                GL_STATIC_DRAW);
 
@@ -455,15 +462,15 @@ bool Renderer::initVoxelResources() {
   glEnableVertexAttribArray(0);
   checkGlError("init Voxel vao vbo");
 
-  glGenBuffers(1, &instanceVBO);
-  glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
+  glGenBuffers(1, &voxel_instance_vbo_);
+  glBindBuffer(GL_ARRAY_BUFFER, voxel_instance_vbo_);
   glBufferData(GL_ARRAY_BUFFER, cube_positions_.size() * sizeof(glm::vec3),
                &cube_positions_[0], GL_STATIC_DRAW);
   glEnableVertexAttribArray(1);
-  glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
+  glBindBuffer(GL_ARRAY_BUFFER, voxel_instance_vbo_);
   glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
   glVertexAttribDivisor(1, 1);
-  checkGlError("init instanceVBO");
+  checkGlError("init voxel_instance_vbo_");
 
   LoadTextures();
 
@@ -476,7 +483,7 @@ bool Renderer::initVoxelResources() {
                      t2_[i], ExtrinsicOffset);
   }
 
-  camera.Position = t2_[0]; /* 相机放到前摄位置 */
+  gl_camera_.Position = t2_[0]; /* 相机放到前摄位置 */
 
   return true;
 }
@@ -494,8 +501,6 @@ void Renderer::drawVoxels() {
   glUniform1i(glGetUniformLocation(voxel_program_, "debug_discard"),
               debug_discard);
 
-  glUniform3fv(glGetUniformLocation(voxel_program_, "viewPos"), 1,
-               &camera.Position[0]);
   glm::vec2 focal_length = glm::vec2(intrinsics_[0][0][0] / IMAGE_WIDTH,
                                      intrinsics_[0][1][1] / IMAGE_HEIGHT);
   glm::vec2 principal_point = glm::vec2(intrinsics_[0][0][2] / IMAGE_WIDTH,
@@ -506,13 +511,13 @@ void Renderer::drawVoxels() {
               principal_point.x, principal_point.y);
 
   glm::mat4 projection =
-      glm::perspective(glm::radians(camera.Zoom),
+      glm::perspective(glm::radians(gl_camera_.Zoom),
                        (float)screen_x_ / (float)screen_y_, 0.1f, 100.0f);
-  glm::mat4 view = camera.GetViewMatrix();
+  glm::mat4 view = gl_camera_.GetViewMatrix();
   glUniformMatrix4fv(glGetUniformLocation(voxel_program_, "projection"), 1,
-                     GL_FALSE, &projection[0][0]);
+                     GL_FALSE, glm::value_ptr(projection));
   glUniformMatrix4fv(glGetUniformLocation(voxel_program_, "view"), 1, GL_FALSE,
-                     &view[0][0]);
+                     glm::value_ptr(view));
   glUniform1i(glGetUniformLocation(voxel_program_, "camera_texture"), 0);
   glActiveTexture(GL_TEXTURE0);
   glBindVertexArray(cube_vao_);
@@ -556,15 +561,30 @@ void Renderer::initTriangle() {
   checkGlError("init triangle");
 }
 void Renderer::drawTriangle() {
+  // 简单进行测试触控调节视角，仅测试数据通路
+  const auto MouseSensitivity = 0.01;
+  glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 5.0f);
+
+  float xoffset = -1.0 * (xpos - last_x_) * MouseSensitivity;
+  float yoffset = -1.0 * (ypos - last_y_) * MouseSensitivity;
+  last_x_ = xpos;
+  last_y_ = ypos;
+
   // camera 计算方法
-  glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 5.0f);     // 后退3单位
-  glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);  // 摄像机面向-Z轴
+  glm::vec3 cameraFront = glm::vec3(0.0f + xoffset, 0.0f + yoffset, -1.0f);  // 摄像机面向-Z轴
   glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);      // 上方为+Y轴
   glm::mat4 view;
   view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
   glm::mat4 projection;
   projection = glm::perspective(
       glm::radians(45.0f), (float)screen_x_ / (float)screen_y_, 0.1f, 100.0f);
+
+  // todo 原先的方案在触控屏上有问题，这个应该研究下原因
+//  step();
+//  projection =glm::perspective(glm::radians(gl_camera_.Zoom),
+//                       (float)screen_x_ / (float)screen_y_, 0.1f, 100.0f);
+//  view = gl_camera_.GetViewMatrix();
+
 
   // 绘制部分
   glClearColor(0.5f, 0.5f, 0.1f, 1.0f);
@@ -591,14 +611,93 @@ void Renderer::releaseVoxelResources() {
   }
 
   glDeleteVertexArrays(1, &cube_vao_);
-  glDeleteBuffers(1, &VBO);
-  glDeleteBuffers(1, &instanceVBO);
+  glDeleteBuffers(1, &cube_vbo_);
+  glDeleteBuffers(1, &voxel_instance_vbo_);
   glDeleteProgram(voxel_program_);
 }
 void Renderer::releaseTriangleResources() {
-  glDeleteVertexArrays(1, &triangle_vbo_);
-  glDeleteBuffers(1, &triangle_vao_);
+  glDeleteVertexArrays(1, &triangle_vao_ );
+  glDeleteBuffers(1, &triangle_vbo_);
   glDeleteProgram(triangle_program_);
+}
+void Renderer::releaseCubeResources() {
+  glDeleteVertexArrays(1, &cube_vao_ );
+  glDeleteBuffers(1, &cube_vbo_);
+  glDeleteProgram(cube_program_);
+}
+void Renderer::initCube() {
+
+  float scaled_vertices[sizeof(CUBE_VERTICES) / sizeof(float)];
+  for (size_t i = 0; i < sizeof(CUBE_VERTICES) / sizeof(float); i += 3) {
+    scaled_vertices[i] = CUBE_VERTICES[i] * VOXEL_SIZE;          // x坐标
+    scaled_vertices[i + 1] = CUBE_VERTICES[i + 1] * VOXEL_SIZE;  // y坐标
+    scaled_vertices[i + 2] = CUBE_VERTICES[i + 2] * VOXEL_SIZE;  // z坐标
+  }
+
+  cube_program_ =
+      createProgram(VERTEX_SHADER_TRIANGLE, FRAGMENT_SHADER_TRIANGLE);
+
+  glGenVertexArrays(1, &cube_vao_);
+  glGenBuffers(1, &cube_vbo_);
+
+  glBindBuffer(GL_ARRAY_BUFFER, cube_vbo_);
+  glBufferData(GL_ARRAY_BUFFER, sizeof(scaled_vertices), scaled_vertices,
+               GL_STATIC_DRAW);
+
+  glBindVertexArray(cube_vao_);
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
+  glEnableVertexAttribArray(0);
+  checkGlError("init cube vao vbo");
+}
+void Renderer::drawCube() {
+  const auto MouseSensitivity = 0.01;
+  glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 5.0f);
+
+  // 摄像机的方向变量
+  glm::vec3 cameraFront; // 摄像机前向向量，初值会在下面根据Yaw和Pitch计算
+  float xoffset = -1.0 * (xpos - last_x_) * MouseSensitivity;
+  float yoffset = -1.0 * (ypos - last_y_) * MouseSensitivity;
+  last_x_ = xpos;
+  last_y_ = ypos;
+
+  // 更新摄像机的Yaw和Pitch值
+  Yaw_ += xoffset;
+  Pitch_ += yoffset;
+
+  // 限制Pitch，防止出现奇怪的循环视图
+  const float maxPitch = 89.0f;
+  const float minPitch = -89.0f;
+  Pitch_ = std::max(minPitch, std::min(Pitch_, maxPitch));
+
+  // camera 计算方法
+  glm::vec3 front;
+  front.x = cos(glm::radians(Yaw_)) * cos(glm::radians(Pitch_));
+  front.y = sin(glm::radians(Pitch_));
+  front.z = sin(glm::radians(Yaw_)) * cos(glm::radians(Pitch_));
+  cameraFront = glm::normalize(front);
+
+  glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);      // 上方为+Y轴
+  glm::mat4 view;
+  view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+  glm::mat4 projection;
+  projection = glm::perspective(
+      glm::radians(45.0f), (float)screen_x_ / (float)screen_y_, 0.1f, 100.0f);
+
+  // 绘制部分
+  glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT);
+  glUseProgram(cube_program_);
+
+  // set camera
+  unsigned int viewLoc = glGetUniformLocation(cube_program_, "view");
+  unsigned int projLoc = glGetUniformLocation(cube_program_, "projection");
+  glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
+  glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
+
+  // draw
+  glBindVertexArray(cube_vao_);
+  glDrawArrays(GL_TRIANGLES, 0, 36);
+  checkGlError("draw cube");
 }
 
 // ----------------------------------------------------------------------------

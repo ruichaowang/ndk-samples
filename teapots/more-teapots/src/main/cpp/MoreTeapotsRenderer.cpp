@@ -71,7 +71,7 @@ void MoreTeapotsRenderer::Init(const int32_t numX, const int32_t numY,
                GL_STATIC_DRAW);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
-  // Create VBO
+  // Create cube_vbo_
   num_vertices_ = sizeof(teapotPositions) / sizeof(teapotPositions[0]) / 3;
   int32_t stride = sizeof(TEAPOT_VERTEX);
   int32_t index = 0;
@@ -265,7 +265,7 @@ void MoreTeapotsRenderer::Update(float fTime) {
 // Render
 //--------------------------------------------------------------------------------
 void MoreTeapotsRenderer::Render() {
-  // Bind the VBO
+  // Bind the cube_vbo_
   glBindBuffer(GL_ARRAY_BUFFER, vbo_);
 
   int32_t iStride = sizeof(TEAPOT_VERTEX);
