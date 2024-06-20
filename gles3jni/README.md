@@ -20,7 +20,8 @@ adb push cordinate /data/data/com.android.gles3jni/cache
 
 - original sample( 16*16 instance): 8155: 5% CPU, 20~22% GPU(不运行时 16%); 8295:7.6% CPU, 0.75～1%
 - 8295 256*256 instance: 15% CPU, 7.14% GPU, 512*512 instance: 37% CPU,26.73 GPU% , 1024*1024 45% CPU, 60% GPU
-- 8295 TPV(100*100*8*6), 7.6% CPU, GPU 60~80.29%. 
+- 8295 TPV(大约总共 25565 个instance) * 6次绘制, 10.0% CPU, GPU 60~80.29%. 
+- 8155  5%CPU，99% GPU，绘制间隔40ms左右
 
 ## 原始说明
 

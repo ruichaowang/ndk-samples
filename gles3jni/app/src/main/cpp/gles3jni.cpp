@@ -495,10 +495,17 @@ void Renderer::render() {
       drawInstance();
       break;
   }
+  auto latest_frame = std::chrono::high_resolution_clock::now();
+  auto frameDuration = std::chrono::duration_cast<std::chrono::milliseconds>(
+                           latest_frame - last_frame_)
+                           .count();
+  ALOGD("frame %lld", frameDuration);
+  last_frame_ = latest_frame;
 }
 
 Renderer* createES3Renderer() {
   Renderer* renderer = new Renderer;
+
 
   switch (DEBUG_MODE) {
     case 0:
@@ -546,6 +553,8 @@ void Renderer::handleTouch(float x, float y) {
 }
 
 bool Renderer::initVoxelResources() {
+  auto last_frame_ = std::chrono::high_resolution_clock::now();
+
   /* 生成缩放的顶点数据 */
 
   float scaled_vertices[sizeof(CUBE_VERTICES) / sizeof(float)];
@@ -635,8 +644,7 @@ void Renderer::drawVoxels() {
   for (auto i = 0; i < CAMERA_COUNTS; i++) {
     glBindTexture(GL_TEXTURE_2D, camera_textures[i]);
     glUniformMatrix4fv(glGetUniformLocation(voxel_program_, "extrinsic_matrix"),
-                       1, GL_FALSE,
-                       glm::value_ptr(model_mat_[i]));
+                       1, GL_FALSE, glm::value_ptr(model_mat_[i]));
     glDrawArraysInstanced(GL_TRIANGLES, 0, 36, cube_positions_.size());
   }
   checkGlError("draw finished");
@@ -762,8 +770,10 @@ void Renderer::initInstance() {
   instance_program_ =
       createProgram(VERTEX_SHADER_INSTANCE, FRAGMENT_SHADER_INSTANCE);
 
-//  GenRandomCubePositions(cube_positions_, INSTANCE_NUMBERS, RANGE); // 随机位置
-  GenCubePosition(VOXEL_COORDINATE_PATH, cube_positions_, VOTEX_OFFSET); //测试加载，也顺利
+  //  GenRandomCubePositions(cube_positions_, INSTANCE_NUMBERS, RANGE); //
+  //  随机位置
+  GenCubePosition(VOXEL_COORDINATE_PATH, cube_positions_,
+                  VOTEX_OFFSET);  // 测试加载，也顺利
 
   glGenBuffers(1, &voxel_instance_vbo_);
   glBindBuffer(GL_ARRAY_BUFFER, voxel_instance_vbo_);
