@@ -158,7 +158,7 @@ void main() {
     }
     FragColor = texture(camera_texture, final_point).rgb;
     // FragColor = texture(camera_texture, TexCoords).rgb;  // 此行为测试使用
-    FragColor = vec3(0.5,0.5,0.5);  // 此行为测试使用
+    //FragColor = vec3(0.5,0.5,0.5);  // 此行为测试使用
 }
 )glsl";
 
@@ -324,10 +324,10 @@ void GenCubePosition(const std::string& cordinate_path,
     for (int y = 0; y < height; ++y) {
       for (int x = 0; x < width; ++x) {
         /* 填充地面 */
-        if (z == 2) {
-          glm::vec3 temp_positon(x * 1.0f, y * 1.0f, z * 1.0f);
-          cube_positions.push_back(temp_positon);
-        }
+//        if (z == 2) {
+//          glm::vec3 temp_positon(x * 1.0f, y * 1.0f, z * 1.0f);
+//          cube_positions.push_back(temp_positon);
+//        }
 
         /* 添加边缘和立面 */
         if (y == 0 || y == 99 || x == 0 || x == 99) {
@@ -521,6 +521,7 @@ void Renderer::handleTouch(float x, float y) {
 
 bool Renderer::initVoxelResources() {
   /* 生成缩放的顶点数据 */
+
   float scaled_vertices[sizeof(CUBE_VERTICES) / sizeof(float)];
   for (size_t i = 0; i < sizeof(CUBE_VERTICES) / sizeof(float); i += 3) {
     scaled_vertices[i] = CUBE_VERTICES[i] * VOXEL_SIZE;          // x坐标
@@ -735,7 +736,8 @@ void Renderer::initInstance() {
   instance_program_ =
       createProgram(VERTEX_SHADER_INSTANCE, FRAGMENT_SHADER_INSTANCE);
 
-  GenRandomCubePositions(cube_positions_, INSTANCE_NUMBERS, RANGE);
+//  GenRandomCubePositions(cube_positions_, INSTANCE_NUMBERS, RANGE); // 随机位置
+  GenCubePosition(VOXEL_COORDINATE_PATH, cube_positions_, VOTEX_OFFSET); //测试加载，也顺利
 
   glGenBuffers(1, &voxel_instance_vbo_);
   glBindBuffer(GL_ARRAY_BUFFER, voxel_instance_vbo_);

@@ -256,7 +256,7 @@ class Renderer {
   float Yaw_ = -90.0f; // Yaw is initialized to -90.0 degrees since a yaw of 0.0 results in a direction vector pointing to the right so we initially rotate a bit to the left.
   float Pitch_ = 0.0f; // 初始俯仰角为0
   glm::mat4 view_, projection_;  //自己创建的camera参数
-  glm::vec3 camera_position_ = glm::vec3(0.0f, 0.0f, 1.0f);
+  glm::vec3 camera_position_ = glm::vec3(0.0f, 0.0f, 10.0f);
 };
 
 extern Renderer *createES3Renderer();
