@@ -216,7 +216,6 @@ class Renderer {
   Renderer();
 
  private:
-  void step();
   void LoadTextures();
   void drawTriangle();
   void drawCube();

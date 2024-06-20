@@ -513,11 +513,6 @@ void GenRandomCubePositions(std::vector<glm::vec3>& cube_positions,
   }
 }
 
-void Renderer::step() {
-  ALOGI("x,y = %f,%f", delta_x, delta_y);
-  gl_camera_.ProcessMouseMovement(delta_x, delta_y);
-}
-
 /* 可以加读写锁或者用原子数保护，当前省时间没有进行此操作 */
 void Renderer::handleTouch(float x, float y) {
   delta_x = x;
@@ -575,7 +570,9 @@ bool Renderer::initVoxelResources() {
 }
 void Renderer::drawVoxels() {
   checkGlError("began draw");
-  step();
+
+  gl_camera_.ProcessMouseMovement(delta_x, delta_y);
+
   glClearColor(0.8f, 0.1f, 0.1f, 1.0f);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   checkGlError("clear");
@@ -650,7 +647,6 @@ void Renderer::drawTriangle() {
   updatingCameraParams();
 
   // todo 原先的方案在触控屏上有问题，这个应该研究下原因
-  //  step();
   //  projection =glm::perspective(glm::radians(gl_camera_.Zoom),
   //                       (float)screen_x_ / (float)screen_y_, 0.1f, 100.0f);
   //  view = gl_camera_.GetViewMatrix();
