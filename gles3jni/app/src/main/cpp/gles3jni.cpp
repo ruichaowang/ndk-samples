@@ -499,7 +499,7 @@ void Renderer::render() {
   auto frameDuration = std::chrono::duration_cast<std::chrono::milliseconds>(
                            latest_frame - last_frame_)
                            .count();
-  ALOGD("frame %lld", frameDuration);
+  ALOGV("frame %lld", frameDuration);
   last_frame_ = latest_frame;
 }
 
