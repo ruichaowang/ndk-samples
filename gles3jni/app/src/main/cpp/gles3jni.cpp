@@ -20,8 +20,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include <random>
+
 #include <ctime>
+#include <random>
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
@@ -39,8 +40,7 @@ void main() {
 }
 )glsl";
 
-static const char FRAGMENT_SHADER_TRIANGLE[] =
-    R"glsl(
+static const char FRAGMENT_SHADER_TRIANGLE[] = R"glsl(
 #version 320 es
 precision mediump float;
 
@@ -50,7 +50,6 @@ void main() {
     FragColor = vec4(1.0, 0.5, 0.2, 1.0);
 }
 )glsl";
-
 
 static const char VERTEX_SHADER_INSTANCE[] = R"glsl(
 #version 320 es
@@ -66,8 +65,7 @@ void main() {
 }
 )glsl";
 
-static const char FRAGMENT_SHADER_INSTANCE[] =
-    R"glsl(
+static const char FRAGMENT_SHADER_INSTANCE[] = R"glsl(
 #version 320 es
 precision mediump float;
 
@@ -77,8 +75,6 @@ void main() {
     FragColor = vec4(1.0, 0.5, 0.2, 1.0);  // 橙色
 }
 )glsl";
-
-
 
 static const char VERTEX_SHADER[] = R"glsl(
 #version 320 es
@@ -411,8 +407,8 @@ Renderer::Renderer() : mEglContext(eglGetCurrentContext()), voxel_program_(0) {}
 Renderer::~Renderer() {
   if (eglGetCurrentContext() != mEglContext) return;
 
-  switch(DEBUG_MODE){
-    case 0 :
+  switch (DEBUG_MODE) {
+    case 0:
       releaseVoxelResources();
       break;
     case 1:
@@ -435,8 +431,8 @@ void Renderer::resize(int w, int h) {
 }
 
 void Renderer::render() {
-  switch(DEBUG_MODE){
-    case 0 :
+  switch (DEBUG_MODE) {
+    case 0:
       drawVoxels();
       break;
     case 1:
@@ -454,8 +450,8 @@ void Renderer::render() {
 Renderer* createES3Renderer() {
   Renderer* renderer = new Renderer;
 
-  switch(DEBUG_MODE){
-    case 0 :
+  switch (DEBUG_MODE) {
+    case 0:
       if (!renderer->initVoxelResources()) {
         delete renderer;
         return NULL;
@@ -478,8 +474,10 @@ Renderer* createES3Renderer() {
 void GenRandomCubePositions(std::vector<glm::vec3>& cube_positions,
                             float numbers, float range) {
   // 随机数生成器初始化
-  std::mt19937 gen(static_cast<unsigned int>(time(0))); // 使用当前时间作为随机种子
-  std::uniform_real_distribution<float> dis(-range, range); // 定义一个分布，在-range到range之间
+  std::mt19937 gen(
+      static_cast<unsigned int>(time(0)));  // 使用当前时间作为随机种子
+  std::uniform_real_distribution<float> dis(
+      -range, range);  // 定义一个分布，在-range到range之间
 
   for (int i = 0; i < numbers; ++i) {
     // 生成随机x, y, z坐标
@@ -640,7 +638,8 @@ void Renderer::drawTriangle() {
   last_y_ = ypos;
 
   // camera 计算方法
-  glm::vec3 cameraFront = glm::vec3(0.0f + xoffset, 0.0f + yoffset, -1.0f);  // 摄像机面向-Z轴
+  glm::vec3 cameraFront =
+      glm::vec3(0.0f + xoffset, 0.0f + yoffset, -1.0f);  // 摄像机面向-Z轴
   glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);      // 上方为+Y轴
   glm::mat4 view;
   view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
@@ -649,11 +648,10 @@ void Renderer::drawTriangle() {
       glm::radians(45.0f), (float)screen_x_ / (float)screen_y_, 0.1f, 100.0f);
 
   // todo 原先的方案在触控屏上有问题，这个应该研究下原因
-//  step();
-//  projection =glm::perspective(glm::radians(gl_camera_.Zoom),
-//                       (float)screen_x_ / (float)screen_y_, 0.1f, 100.0f);
-//  view = gl_camera_.GetViewMatrix();
-
+  //  step();
+  //  projection =glm::perspective(glm::radians(gl_camera_.Zoom),
+  //                       (float)screen_x_ / (float)screen_y_, 0.1f, 100.0f);
+  //  view = gl_camera_.GetViewMatrix();
 
   // 绘制部分
   glClearColor(0.5f, 0.5f, 0.1f, 1.0f);
@@ -685,12 +683,12 @@ void Renderer::releaseVoxelResources() {
   glDeleteProgram(voxel_program_);
 }
 void Renderer::releaseTriangleResources() {
-  glDeleteVertexArrays(1, &triangle_vao_ );
+  glDeleteVertexArrays(1, &triangle_vao_);
   glDeleteBuffers(1, &triangle_vbo_);
   glDeleteProgram(triangle_program_);
 }
 void Renderer::releaseCubeResources() {
-  glDeleteVertexArrays(1, &cube_vao_ );
+  glDeleteVertexArrays(1, &cube_vao_);
   glDeleteBuffers(1, &cube_vbo_);
   glDeleteProgram(cube_program_);
 }
@@ -722,7 +720,7 @@ void Renderer::drawCube() {
   glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 50.0f);
 
   // 摄像机的方向变量
-  glm::vec3 cameraFront; // 摄像机前向向量，初值会在下面根据Yaw和Pitch计算
+  glm::vec3 cameraFront;  // 摄像机前向向量，初值会在下面根据Yaw和Pitch计算
   float xoffset = -1.0 * (xpos - last_x_) * MouseSensitivity;
   float yoffset = -1.0 * (ypos - last_y_) * MouseSensitivity;
   last_x_ = xpos;
@@ -744,7 +742,7 @@ void Renderer::drawCube() {
   front.z = sin(glm::radians(Yaw_)) * cos(glm::radians(Pitch_));
   cameraFront = glm::normalize(front);
 
-  glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);      // 上方为+Y轴
+  glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);  // 上方为+Y轴
   glm::mat4 view;
   view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
   glm::mat4 projection;
@@ -768,8 +766,8 @@ void Renderer::drawCube() {
   checkGlError("draw cube");
 }
 void Renderer::initInstance() {
-
-  instance_program_ =  createProgram(VERTEX_SHADER_INSTANCE, FRAGMENT_SHADER_INSTANCE);
+  instance_program_ =
+      createProgram(VERTEX_SHADER_INSTANCE, FRAGMENT_SHADER_INSTANCE);
 
   GenRandomCubePositions(cube_positions_, INSTANCE_NUMBERS, RANGE);
 
@@ -792,7 +790,7 @@ void Renderer::drawInstance() {
   glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 50.0f);
 
   // 摄像机的方向变量
-  glm::vec3 cameraFront; // 摄像机前向向量，初值会在下面根据Yaw和Pitch计算
+  glm::vec3 cameraFront;  // 摄像机前向向量，初值会在下面根据Yaw和Pitch计算
   float xoffset = -1.0 * (xpos - last_x_) * MouseSensitivity;
   float yoffset = -1.0 * (ypos - last_y_) * MouseSensitivity;
   last_x_ = xpos;
@@ -814,7 +812,7 @@ void Renderer::drawInstance() {
   front.z = sin(glm::radians(Yaw_)) * cos(glm::radians(Pitch_));
   cameraFront = glm::normalize(front);
 
-  glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);      // 上方为+Y轴
+  glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);  // 上方为+Y轴
   glm::mat4 view;
   view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
   glm::mat4 projection;
@@ -835,7 +833,6 @@ void Renderer::drawInstance() {
   // draw
   glBindVertexArray(cube_vao_);
   glDrawArraysInstanced(GL_TRIANGLES, 0, 36, cube_positions_.size());
-
 }
 
 // ----------------------------------------------------------------------------
