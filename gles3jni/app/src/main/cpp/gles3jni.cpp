@@ -698,8 +698,7 @@ void Renderer::initCube() {
     scaled_vertices[i + 2] = CUBE_VERTICES[i + 2] * VOXEL_SIZE;  // z坐标
   }
 
-  cube_program_ =
-      createProgram(VERTEX_SHADER_CUBE, FRAGMENT_SHADER_CUBE);
+  cube_program_ = createProgram(VERTEX_SHADER_CUBE, FRAGMENT_SHADER_CUBE);
 
   glGenVertexArrays(1, &cube_vao_);
   glGenBuffers(1, &cube_vbo_);
@@ -774,7 +773,7 @@ void Renderer::updatingCameraParams() {
   const auto MouseSensitivity = 0.01;
   // 摄像机的方向变量
   float xoffset = -1.0 * delta_x * MouseSensitivity;
-  float yoffset =  delta_y * MouseSensitivity;
+  float yoffset = delta_y * MouseSensitivity;
 
   // 更新摄像机的Yaw和Pitch值
   Yaw_ += xoffset;
@@ -793,7 +792,8 @@ void Renderer::updatingCameraParams() {
   glm::vec3 cameraFront = glm::normalize(front);
 
   glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);  // 上方为+Y轴
-  view_ = glm::lookAt(camera_position_, camera_position_ + cameraFront, cameraUp);
+  view_ =
+      glm::lookAt(camera_position_, camera_position_ + cameraFront, cameraUp);
   projection_ = glm::perspective(
       glm::radians(45.0f), (float)screen_x_ / (float)screen_y_, 0.1f, 100.0f);
 }
