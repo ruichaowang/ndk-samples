@@ -183,8 +183,9 @@ const auto quaternion_back_right =
 const auto translation_vectors_back_right =
     glm::vec3(1.0148780988, -0.480568219723, 1.56239545128);
 
-const auto DEBUG_MODE = 3; // 0 voxels, 1 triangle, 2 cube,3 instance,
-const auto INSTANCE_NUMBERS = 50;
+// 当前不知道为什么 voles 绘制不出来，是 camera 的问题么？
+const auto DEBUG_MODE = 3; // 0 voxels, 1 triangle, 2 cube, 3 instance,
+const auto INSTANCE_NUMBERS = 200;
 const auto RANGE = 40;
 
 // returns true if a GL error occurred
@@ -225,11 +226,9 @@ class Renderer {
   void releaseTriangleResources();
   void releaseCubeResources();
   void releaseInstanceResources();
+  void updatingCameraParams();
 
-  float xpos = 1000.0f;
-  float ypos = 1000.0f;
-  float last_x_ = 1000.0f;
-  float last_y_ = 1000.0f;
+  float delta_x, delta_y = 0;
   int screen_x_ = 0;
   int screen_y_ = 0;
 
@@ -257,6 +256,8 @@ class Renderer {
   Camera gl_camera_;
   float Yaw_ = -90.0f; // Yaw is initialized to -90.0 degrees since a yaw of 0.0 results in a direction vector pointing to the right so we initially rotate a bit to the left.
   float Pitch_ = 0.0f; // 初始俯仰角为0
+  glm::mat4 view_, projection_;  //自己创建的camera参数
+  glm::vec3 camera_position_ = glm::vec3(0.0f, 0.0f, 5.0f);
 };
 
 extern Renderer *createES3Renderer();

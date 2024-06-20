@@ -51,6 +51,30 @@ void main() {
 }
 )glsl";
 
+static const char VERTEX_SHADER_CUBE[] = R"glsl(
+#version 320 es
+precision mediump float;
+
+layout(location = 0) in vec3 aPos;
+
+uniform mat4 view;
+uniform mat4 projection;
+void main() {
+    gl_Position = projection * view * vec4(aPos, 1.0); //做变换
+}
+)glsl";
+
+static const char FRAGMENT_SHADER_CUBE[] = R"glsl(
+#version 320 es
+precision mediump float;
+
+out vec4 FragColor;
+
+void main() {
+    FragColor = vec4(1.0, 0.5, 0.2, 1.0);
+}
+)glsl";
+
 static const char VERTEX_SHADER_INSTANCE[] = R"glsl(
 #version 320 es
 precision mediump float;
@@ -490,19 +514,14 @@ void GenRandomCubePositions(std::vector<glm::vec3>& cube_positions,
 }
 
 void Renderer::step() {
-  ALOGI("x,y = %f,%f", xpos, ypos);
-  float xoffset = -1.0 * (xpos - last_x_);
-  float yoffset = -1.0 * (ypos - last_y_);
-  last_x_ = xpos;
-  last_y_ = ypos;
-
-  gl_camera_.ProcessMouseMovement(xoffset, yoffset);
+  ALOGI("x,y = %f,%f", delta_x, delta_y);
+  gl_camera_.ProcessMouseMovement(delta_x, delta_y);
 }
 
 /* 可以加读写锁或者用原子数保护，当前省时间没有进行此操作 */
 void Renderer::handleTouch(float x, float y) {
-  xpos = x;
-  ypos = y;
+  delta_x = x;
+  delta_y = y;
 }
 
 bool Renderer::initVoxelResources() {
@@ -628,24 +647,7 @@ void Renderer::initTriangle() {
   checkGlError("init triangle");
 }
 void Renderer::drawTriangle() {
-  // 简单进行测试触控调节视角，仅测试数据通路
-  const auto MouseSensitivity = 0.01;
-  glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 5.0f);
-
-  float xoffset = -1.0 * (xpos - last_x_) * MouseSensitivity;
-  float yoffset = -1.0 * (ypos - last_y_) * MouseSensitivity;
-  last_x_ = xpos;
-  last_y_ = ypos;
-
-  // camera 计算方法
-  glm::vec3 cameraFront =
-      glm::vec3(0.0f + xoffset, 0.0f + yoffset, -1.0f);  // 摄像机面向-Z轴
-  glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);      // 上方为+Y轴
-  glm::mat4 view;
-  view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
-  glm::mat4 projection;
-  projection = glm::perspective(
-      glm::radians(45.0f), (float)screen_x_ / (float)screen_y_, 0.1f, 100.0f);
+  updatingCameraParams();
 
   // todo 原先的方案在触控屏上有问题，这个应该研究下原因
   //  step();
@@ -661,8 +663,8 @@ void Renderer::drawTriangle() {
   // set camera
   unsigned int viewLoc = glGetUniformLocation(triangle_program_, "view");
   unsigned int projLoc = glGetUniformLocation(triangle_program_, "projection");
-  glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
-  glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
+  glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view_));
+  glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection_));
 
   // draw
   glBindVertexArray(triangle_vao_);
@@ -701,7 +703,7 @@ void Renderer::initCube() {
   }
 
   cube_program_ =
-      createProgram(VERTEX_SHADER_TRIANGLE, FRAGMENT_SHADER_TRIANGLE);
+      createProgram(VERTEX_SHADER_CUBE, FRAGMENT_SHADER_CUBE);
 
   glGenVertexArrays(1, &cube_vao_);
   glGenBuffers(1, &cube_vbo_);
@@ -716,38 +718,7 @@ void Renderer::initCube() {
   checkGlError("init cube vao vbo");
 }
 void Renderer::drawCube() {
-  const auto MouseSensitivity = 0.01;
-  glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 50.0f);
-
-  // 摄像机的方向变量
-  glm::vec3 cameraFront;  // 摄像机前向向量，初值会在下面根据Yaw和Pitch计算
-  float xoffset = -1.0 * (xpos - last_x_) * MouseSensitivity;
-  float yoffset = -1.0 * (ypos - last_y_) * MouseSensitivity;
-  last_x_ = xpos;
-  last_y_ = ypos;
-
-  // 更新摄像机的Yaw和Pitch值
-  Yaw_ += xoffset;
-  Pitch_ += yoffset;
-
-  // 限制Pitch，防止出现奇怪的循环视图
-  const float maxPitch = 89.0f;
-  const float minPitch = -89.0f;
-  Pitch_ = std::max(minPitch, std::min(Pitch_, maxPitch));
-
-  // camera 计算方法
-  glm::vec3 front;
-  front.x = cos(glm::radians(Yaw_)) * cos(glm::radians(Pitch_));
-  front.y = sin(glm::radians(Pitch_));
-  front.z = sin(glm::radians(Yaw_)) * cos(glm::radians(Pitch_));
-  cameraFront = glm::normalize(front);
-
-  glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);  // 上方为+Y轴
-  glm::mat4 view;
-  view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
-  glm::mat4 projection;
-  projection = glm::perspective(
-      glm::radians(45.0f), (float)screen_x_ / (float)screen_y_, 0.1f, 100.0f);
+  updatingCameraParams();
 
   // 绘制部分
   glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
@@ -757,8 +728,8 @@ void Renderer::drawCube() {
   // set camera
   unsigned int viewLoc = glGetUniformLocation(cube_program_, "view");
   unsigned int projLoc = glGetUniformLocation(cube_program_, "projection");
-  glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
-  glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
+  glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view_));
+  glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection_));
 
   // draw
   glBindVertexArray(cube_vao_);
@@ -786,15 +757,28 @@ void Renderer::releaseInstanceResources() {
   glDeleteProgram(instance_program_);
 }
 void Renderer::drawInstance() {
-  const auto MouseSensitivity = 0.01;
-  glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 50.0f);
+  updatingCameraParams();
 
+  // 绘制部分
+  glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT);
+  glUseProgram(instance_program_);
+
+  // set camera
+  unsigned int viewLoc = glGetUniformLocation(instance_program_, "view");
+  unsigned int projLoc = glGetUniformLocation(instance_program_, "projection");
+  glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view_));
+  glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection_));
+
+  // draw
+  glBindVertexArray(cube_vao_);
+  glDrawArraysInstanced(GL_TRIANGLES, 0, 36, cube_positions_.size());
+}
+void Renderer::updatingCameraParams() {
+  const auto MouseSensitivity = 0.01;
   // 摄像机的方向变量
-  glm::vec3 cameraFront;  // 摄像机前向向量，初值会在下面根据Yaw和Pitch计算
-  float xoffset = -1.0 * (xpos - last_x_) * MouseSensitivity;
-  float yoffset = -1.0 * (ypos - last_y_) * MouseSensitivity;
-  last_x_ = xpos;
-  last_y_ = ypos;
+  float xoffset = -1.0 * delta_x * MouseSensitivity;
+  float yoffset =  delta_y * MouseSensitivity;
 
   // 更新摄像机的Yaw和Pitch值
   Yaw_ += xoffset;
@@ -810,29 +794,12 @@ void Renderer::drawInstance() {
   front.x = cos(glm::radians(Yaw_)) * cos(glm::radians(Pitch_));
   front.y = sin(glm::radians(Pitch_));
   front.z = sin(glm::radians(Yaw_)) * cos(glm::radians(Pitch_));
-  cameraFront = glm::normalize(front);
+  glm::vec3 cameraFront = glm::normalize(front);
 
   glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);  // 上方为+Y轴
-  glm::mat4 view;
-  view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
-  glm::mat4 projection;
-  projection = glm::perspective(
+  view_ = glm::lookAt(camera_position_, camera_position_ + cameraFront, cameraUp);
+  projection_ = glm::perspective(
       glm::radians(45.0f), (float)screen_x_ / (float)screen_y_, 0.1f, 100.0f);
-
-  // 绘制部分
-  glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
-  glClear(GL_COLOR_BUFFER_BIT);
-  glUseProgram(instance_program_);
-
-  // set camera
-  unsigned int viewLoc = glGetUniformLocation(instance_program_, "view");
-  unsigned int projLoc = glGetUniformLocation(instance_program_, "projection");
-  glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
-  glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
-
-  // draw
-  glBindVertexArray(cube_vao_);
-  glDrawArraysInstanced(GL_TRIANGLES, 0, 36, cube_positions_.size());
 }
 
 // ----------------------------------------------------------------------------
@@ -846,8 +813,8 @@ JNIEXPORT void JNICALL Java_com_android_gles3jni_GLES3JNILib_resize(
     JNIEnv* env, jobject obj, jint width, jint height);
 JNIEXPORT void JNICALL Java_com_android_gles3jni_GLES3JNILib_step(JNIEnv* env,
                                                                   jobject obj);
-JNIEXPORT void JNICALL Java_com_android_gles3jni_GLES3JNILib_onTouchEventNative(
-    JNIEnv* env, jobject obj, jint action, jfloat x, jfloat y);
+JNIEXPORT void JNICALL Java_com_android_gles3jni_GLES3JNILib_onTouchMove(
+    JNIEnv* env, jobject obj, jfloat delta_x, jfloat delta_y);
 };
 
 #if !defined(DYNAMIC_ES3)
@@ -888,11 +855,11 @@ JNIEXPORT void JNICALL Java_com_android_gles3jni_GLES3JNILib_step(JNIEnv* env,
   }
 }
 
-JNIEXPORT void JNICALL Java_com_android_gles3jni_GLES3JNILib_onTouchEventNative(
-    JNIEnv* env, jobject obj, jint action, jfloat x, jfloat y) {
+JNIEXPORT void JNICALL Java_com_android_gles3jni_GLES3JNILib_onTouchMove(
+    JNIEnv* env, jobject obj, jfloat delta_x, jfloat delta_y) {
   // 简单的跨线程，
-  float xpos = static_cast<float>(x);
-  float ypos = static_cast<float>(y);
+  float x = static_cast<float>(delta_x);
+  float y = static_cast<float>(delta_y);
   if (g_renderer) {
     g_renderer->handleTouch(x, y);
   }
