@@ -183,7 +183,9 @@ const auto quaternion_back_right =
 const auto translation_vectors_back_right =
     glm::vec3(1.0148780988, -0.480568219723, 1.56239545128);
 
-const auto DEBUG_MODE = 2; // 0 voxels, 1 triangle, 2 cube,
+const auto DEBUG_MODE = 3; // 0 voxels, 1 triangle, 2 cube,3 instance,
+const auto INSTANCE_NUMBERS = 50;
+const auto RANGE = 40;
 
 // returns true if a GL error occurred
 bool checkGlError(const char *funcName);
@@ -196,6 +198,7 @@ void GenCubePosition(const std::string &cordinate_path,
 void GenerateModelMat(glm::quat &quaternion, glm::vec3 &translationVector,
                       glm::mat4 &model_mat, glm::vec3 &t2_,
                       const glm::vec3 &ExtrinsicOffset);
+void GenRandomCubePositions(std::vector<glm::vec3> &cube_positions, float numbers, float range);
 // ----------------------------------------------------------------------------
 // Interface to the ES2 and ES3 renderers, used by JNI code.
 
@@ -208,6 +211,7 @@ class Renderer {
   bool initVoxelResources();
   void initTriangle();
   void initCube();
+  void initInstance();
   Renderer();
 
  private:
@@ -216,9 +220,11 @@ class Renderer {
   void drawTriangle();
   void drawCube();
   void drawVoxels();
+  void drawInstance();
   void releaseVoxelResources();
   void releaseTriangleResources();
   void releaseCubeResources();
+  void releaseInstanceResources();
 
   float xpos = 1000.0f;
   float ypos = 1000.0f;
@@ -231,6 +237,7 @@ class Renderer {
   GLuint voxel_program_, cube_vbo_, cube_vao_, voxel_instance_vbo_;
   GLuint triangle_program_, triangle_vbo_, triangle_vao_;
   GLuint cube_program_;
+  GLuint instance_program_;
 
   std::array<GLuint, CAMERA_COUNTS> camera_textures;
   std::array<glm::mat3, CAMERA_COUNTS> intrinsics_ = {

@@ -20,6 +20,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <random>
+#include <ctime>
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
@@ -45,9 +47,38 @@ precision mediump float;
 out vec4 FragColor;
 
 void main() {
+    FragColor = vec4(1.0, 0.5, 0.2, 1.0);
+}
+)glsl";
+
+
+static const char VERTEX_SHADER_INSTANCE[] = R"glsl(
+#version 320 es
+precision mediump float;
+
+layout(location = 0) in vec3 aPos;
+layout(location = 1) in vec3 aInstancePos; // 实例位置
+
+uniform mat4 view;
+uniform mat4 projection;
+void main() {
+    gl_Position = projection * view * vec4(aPos + aInstancePos, 1.0);
+}
+)glsl";
+
+static const char FRAGMENT_SHADER_INSTANCE[] =
+    R"glsl(
+#version 320 es
+precision mediump float;
+
+out vec4 FragColor;
+
+void main() {
     FragColor = vec4(1.0, 0.5, 0.2, 1.0);  // 橙色
 }
 )glsl";
+
+
 
 static const char VERTEX_SHADER[] = R"glsl(
 #version 320 es
@@ -380,12 +411,20 @@ Renderer::Renderer() : mEglContext(eglGetCurrentContext()), voxel_program_(0) {}
 Renderer::~Renderer() {
   if (eglGetCurrentContext() != mEglContext) return;
 
-  if (DEBUG_MODE == 0) {
-    releaseVoxelResources();
-  } else if (DEBUG_MODE == 1){
-    releaseTriangleResources();
-  } else if (DEBUG_MODE == 2){
-    releaseCubeResources();
+  switch(DEBUG_MODE){
+    case 0 :
+      releaseVoxelResources();
+      break;
+    case 1:
+      releaseTriangleResources();
+      break;
+    case 2:
+      releaseCubeResources();
+      break;
+    case 3:
+      releaseCubeResources();
+      releaseInstanceResources();
+      break;
   }
 }
 
@@ -396,30 +435,60 @@ void Renderer::resize(int w, int h) {
 }
 
 void Renderer::render() {
-  if (DEBUG_MODE == 0) {
-    drawVoxels();
-  } else if (DEBUG_MODE == 1) {
-    drawTriangle();
-  } else if (DEBUG_MODE == 2) {
-    drawCube();
+  switch(DEBUG_MODE){
+    case 0 :
+      drawVoxels();
+      break;
+    case 1:
+      drawTriangle();
+      break;
+    case 2:
+      drawCube();
+      break;
+    case 3:
+      drawInstance();
+      break;
   }
 }
 
 Renderer* createES3Renderer() {
   Renderer* renderer = new Renderer;
 
-  if (DEBUG_MODE == 0) {
-    if (!renderer->initVoxelResources()) {
-      delete renderer;
-      return NULL;
-    }
-  } else if (DEBUG_MODE == 1) {
-    renderer->initTriangle();
-  } else if (DEBUG_MODE == 2) {
-    renderer->initCube();
+  switch(DEBUG_MODE){
+    case 0 :
+      if (!renderer->initVoxelResources()) {
+        delete renderer;
+        return NULL;
+      }
+      break;
+    case 1:
+      renderer->initTriangle();
+      break;
+    case 2:
+      renderer->initCube();
+      break;
+    case 3:
+      renderer->initCube();
+      renderer->initInstance();
+      break;
   }
 
   return renderer;
+}
+void GenRandomCubePositions(std::vector<glm::vec3>& cube_positions,
+                            float numbers, float range) {
+  // 随机数生成器初始化
+  std::mt19937 gen(static_cast<unsigned int>(time(0))); // 使用当前时间作为随机种子
+  std::uniform_real_distribution<float> dis(-range, range); // 定义一个分布，在-range到range之间
+
+  for (int i = 0; i < numbers; ++i) {
+    // 生成随机x, y, z坐标
+    float x = dis(gen);
+    float y = dis(gen);
+    float z = dis(gen);
+    // 用生成的坐标创建一个vec3，并添加到vector中
+    cube_positions.emplace_back(x, y, z);
+  }
 }
 
 void Renderer::step() {
@@ -626,7 +695,6 @@ void Renderer::releaseCubeResources() {
   glDeleteProgram(cube_program_);
 }
 void Renderer::initCube() {
-
   float scaled_vertices[sizeof(CUBE_VERTICES) / sizeof(float)];
   for (size_t i = 0; i < sizeof(CUBE_VERTICES) / sizeof(float); i += 3) {
     scaled_vertices[i] = CUBE_VERTICES[i] * VOXEL_SIZE;          // x坐标
@@ -651,7 +719,7 @@ void Renderer::initCube() {
 }
 void Renderer::drawCube() {
   const auto MouseSensitivity = 0.01;
-  glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 5.0f);
+  glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 50.0f);
 
   // 摄像机的方向变量
   glm::vec3 cameraFront; // 摄像机前向向量，初值会在下面根据Yaw和Pitch计算
@@ -698,6 +766,76 @@ void Renderer::drawCube() {
   glBindVertexArray(cube_vao_);
   glDrawArrays(GL_TRIANGLES, 0, 36);
   checkGlError("draw cube");
+}
+void Renderer::initInstance() {
+
+  instance_program_ =  createProgram(VERTEX_SHADER_INSTANCE, FRAGMENT_SHADER_INSTANCE);
+
+  GenRandomCubePositions(cube_positions_, INSTANCE_NUMBERS, RANGE);
+
+  glGenBuffers(1, &voxel_instance_vbo_);
+  glBindBuffer(GL_ARRAY_BUFFER, voxel_instance_vbo_);
+  glBufferData(GL_ARRAY_BUFFER, cube_positions_.size() * sizeof(glm::vec3),
+               &cube_positions_[0], GL_STATIC_DRAW);
+  glEnableVertexAttribArray(1);
+  glBindBuffer(GL_ARRAY_BUFFER, voxel_instance_vbo_);
+  glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+  glVertexAttribDivisor(1, 1);
+  checkGlError("init voxel_instance_vbo_");
+}
+void Renderer::releaseInstanceResources() {
+  glDeleteBuffers(1, &voxel_instance_vbo_);
+  glDeleteProgram(instance_program_);
+}
+void Renderer::drawInstance() {
+  const auto MouseSensitivity = 0.01;
+  glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 50.0f);
+
+  // 摄像机的方向变量
+  glm::vec3 cameraFront; // 摄像机前向向量，初值会在下面根据Yaw和Pitch计算
+  float xoffset = -1.0 * (xpos - last_x_) * MouseSensitivity;
+  float yoffset = -1.0 * (ypos - last_y_) * MouseSensitivity;
+  last_x_ = xpos;
+  last_y_ = ypos;
+
+  // 更新摄像机的Yaw和Pitch值
+  Yaw_ += xoffset;
+  Pitch_ += yoffset;
+
+  // 限制Pitch，防止出现奇怪的循环视图
+  const float maxPitch = 89.0f;
+  const float minPitch = -89.0f;
+  Pitch_ = std::max(minPitch, std::min(Pitch_, maxPitch));
+
+  // camera 计算方法
+  glm::vec3 front;
+  front.x = cos(glm::radians(Yaw_)) * cos(glm::radians(Pitch_));
+  front.y = sin(glm::radians(Pitch_));
+  front.z = sin(glm::radians(Yaw_)) * cos(glm::radians(Pitch_));
+  cameraFront = glm::normalize(front);
+
+  glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);      // 上方为+Y轴
+  glm::mat4 view;
+  view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+  glm::mat4 projection;
+  projection = glm::perspective(
+      glm::radians(45.0f), (float)screen_x_ / (float)screen_y_, 0.1f, 100.0f);
+
+  // 绘制部分
+  glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT);
+  glUseProgram(instance_program_);
+
+  // set camera
+  unsigned int viewLoc = glGetUniformLocation(instance_program_, "view");
+  unsigned int projLoc = glGetUniformLocation(instance_program_, "projection");
+  glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
+  glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
+
+  // draw
+  glBindVertexArray(cube_vao_);
+  glDrawArraysInstanced(GL_TRIANGLES, 0, 36, cube_positions_.size());
+
 }
 
 // ----------------------------------------------------------------------------
