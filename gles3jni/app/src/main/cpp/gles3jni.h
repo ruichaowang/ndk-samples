@@ -75,7 +75,6 @@ const auto RANGE = 50;
 const auto VOTEX_OFFSET = glm::vec3(-50.5f, -50.5f, -2.0f);  //?-35
 /* 外参的坐标系和车辆坐标系的变化，这个数为推测出来的 */
 const auto ExtrinsicOffset = glm::vec3(-0.0, 1.0, 1.5);
-const int debug_discard = 1;
 const auto IMAGE_WIDTH = 1600.0;
 const auto IMAGE_HEIGHT = 900.0;
 const float VOXEL_SIZE = 1.024f;

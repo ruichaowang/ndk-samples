@@ -146,7 +146,6 @@ void main() {
   FragPos = aPos + aInstancePos; // FragPos = aPos + position;
   gl_Position = projection * view * vec4(FragPos, 1.0);
   model_position = extrinsic_matrix * vec4(FragPos, 1.0);
-  model_position.xyz = model_position.xyz / model_position.w;
 }
 )glsl";
 
@@ -161,7 +160,6 @@ out vec3 FragColor;
 uniform sampler2D camera_texture;
 uniform vec2 focal_lengths;
 uniform vec2 cammera_principal_point;
-uniform int debug_discard;
 
 void main() {
     float pz = model_position.z;
@@ -174,17 +172,11 @@ void main() {
     vec2 viewp = vec2(model_position.x/pz, model_position.y/pz);
     vec2 final_point = viewp * focal_lengths + cammera_principal_point;
 
-    if (debug_discard == 1) {
-        if (final_point.x < 0.0 ||  final_point.y < 0.0) {
-            discard;
-        }
-        if (final_point.x > 1.0 || final_point.y > 1.0) {
-            discard;
-        }
+    if (final_point.x < 0.0 ||  final_point.y < 0.0 || final_point.x > 1.0 || final_point.y > 1.0) {
+           discard;
     }
+
     FragColor = texture(camera_texture, final_point).rgb;
-    // FragColor = texture(camera_texture, TexCoords).rgb;  // 此行为测试使用
-    //FragColor = vec3(0.5,0.5,0.5);  // 此行为测试使用
 }
 )glsl";
 
@@ -602,6 +594,21 @@ bool Renderer::initVoxelResources() {
 
   gl_camera_.Position = t2_[0]; /* 相机放到前摄位置 */
 
+  glUseProgram(voxel_program_);
+
+  checkGlError("use program");
+  glUniform1i(glGetUniformLocation(voxel_program_, "camera_texture"), 0);
+
+  glm::vec2 focal_length = glm::vec2(intrinsics_[0][0][0] / IMAGE_WIDTH,
+                                     intrinsics_[0][1][1] / IMAGE_HEIGHT);
+  glm::vec2 principal_point = glm::vec2(intrinsics_[0][0][2] / IMAGE_WIDTH,
+                                        intrinsics_[0][1][2] / IMAGE_HEIGHT);
+  glUniform2f(glGetUniformLocation(voxel_program_, "focal_lengths"),
+              focal_length.x, focal_length.y);
+  glUniform2f(glGetUniformLocation(voxel_program_, "cammera_principal_point"),
+              principal_point.x, principal_point.y);
+  glUseProgram(0);
+
   return true;
 }
 void Renderer::drawVoxels() {
@@ -614,20 +621,8 @@ void Renderer::drawVoxels() {
   checkGlError("clear");
 
   glUseProgram(voxel_program_);
-
-  checkGlError("use program");
-  glUniform1i(glGetUniformLocation(voxel_program_, "camera_texture"), 0);
-  glUniform1i(glGetUniformLocation(voxel_program_, "debug_discard"),
-              debug_discard);
-
-  glm::vec2 focal_length = glm::vec2(intrinsics_[0][0][0] / IMAGE_WIDTH,
-                                     intrinsics_[0][1][1] / IMAGE_HEIGHT);
-  glm::vec2 principal_point = glm::vec2(intrinsics_[0][0][2] / IMAGE_WIDTH,
-                                        intrinsics_[0][1][2] / IMAGE_HEIGHT);
-  glUniform2f(glGetUniformLocation(voxel_program_, "focal_lengths"),
-              focal_length.x, focal_length.y);
-  glUniform2f(glGetUniformLocation(voxel_program_, "cammera_principal_point"),
-              principal_point.x, principal_point.y);
+//  glEnable(GL_CULL_FACE);
+  glCullFace(GL_CCW);
 
   glm::mat4 projection =
       glm::perspective(glm::radians(gl_camera_.Zoom),
