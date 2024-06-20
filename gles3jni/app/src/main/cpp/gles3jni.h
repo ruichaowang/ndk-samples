@@ -66,37 +66,15 @@
 
 // 由于当前绘制不出来东西， 先画一个三角形确认原因
 
-const GLfloat triangleVertices[] = {
-    0.0f,  1.0f,  0.0f,  // 顶点
-    -1.0f, -1.0f, 0.0f,  // 左下角
-    1.0f,  -1.0f, 0.0f   // 右下角
-};
-
-const GLfloat CUBE_VERTICES[] = {
-    // positions
-    -0.5f, -0.5f, -0.5f, 0.5f,  -0.5f, -0.5f, 0.5f,  0.5f,  -0.5f,
-    0.5f,  0.5f,  -0.5f, -0.5f, 0.5f,  -0.5f, -0.5f, -0.5f, -0.5f,
-
-    -0.5f, -0.5f, 0.5f,  0.5f,  -0.5f, 0.5f,  0.5f,  0.5f,  0.5f,
-    0.5f,  0.5f,  0.5f,  -0.5f, 0.5f,  0.5f,  -0.5f, -0.5f, 0.5f,
-
-    -0.5f, 0.5f,  0.5f,  -0.5f, 0.5f,  -0.5f, -0.5f, -0.5f, -0.5f,
-    -0.5f, -0.5f, -0.5f, -0.5f, -0.5f, 0.5f,  -0.5f, 0.5f,  0.5f,
-
-    0.5f,  0.5f,  0.5f,  0.5f,  0.5f,  -0.5f, 0.5f,  -0.5f, -0.5f,
-    0.5f,  -0.5f, -0.5f, 0.5f,  -0.5f, 0.5f,  0.5f,  0.5f,  0.5f,
-
-    -0.5f, -0.5f, -0.5f, 0.5f,  -0.5f, -0.5f, 0.5f,  -0.5f, 0.5f,
-    0.5f,  -0.5f, 0.5f,  -0.5f, -0.5f, 0.5f,  -0.5f, -0.5f, -0.5f,
-
-    -0.5f, 0.5f,  -0.5f, 0.5f,  0.5f,  -0.5f, 0.5f,  0.5f,  0.5f,
-    0.5f,  0.5f,  0.5f,  -0.5f, 0.5f,  0.5f,  -0.5f, 0.5f,  -0.5f};
+// 当前不知道为什么 voles 绘制不出来，是 camera 的问题么？
+const auto DEBUG_MODE = 0; // 0 voxels, 1 triangle, 2 cube, 3 instance,
+const auto INSTANCE_NUMBERS = 5000;
+const auto RANGE = 50;
 
 /* 把车挪到整个模型的中心,调节地面的基准 -2 是推测值 */
 const auto VOTEX_OFFSET = glm::vec3(-50.5f, -50.5f, -2.0f);  //?-35
 /* 外参的坐标系和车辆坐标系的变化，这个数为推测出来的 */
 const auto ExtrinsicOffset = glm::vec3(-0.0, 1.0, 1.5);
-const auto debug_draw_pano = true;
 const int debug_discard = 1;
 const auto IMAGE_WIDTH = 1600.0;
 const auto IMAGE_HEIGHT = 900.0;
@@ -183,10 +161,7 @@ const auto quaternion_back_right =
 const auto translation_vectors_back_right =
     glm::vec3(1.0148780988, -0.480568219723, 1.56239545128);
 
-// 当前不知道为什么 voles 绘制不出来，是 camera 的问题么？
-const auto DEBUG_MODE = 3; // 0 voxels, 1 triangle, 2 cube, 3 instance,
-const auto INSTANCE_NUMBERS = 5000;
-const auto RANGE = 50;
+
 
 // returns true if a GL error occurred
 bool checkGlError(const char *funcName);

@@ -10,6 +10,7 @@
 ## 使用说明
 
 - 为了简单，直接选择把原始的文件推送到 cache 中，并没有从 assets 读取 /data/data/com.android.gles3jni/cache
+
 ``` shell
 adb push camera /data/data/com.android.gles3jni/cache
 adb push cordinate /data/data/com.android.gles3jni/cache
@@ -19,7 +20,7 @@ adb push cordinate /data/data/com.android.gles3jni/cache
 
 - original sample( 16*16 instance): 8155: 5% CPU, 20~22% GPU(不运行时 16%); 8295:7.6% CPU, 0.75～1%
 - 8295 256*256 instance: 15% CPU, 7.14% GPU, 512*512 instance: 37% CPU,26.73 GPU% , 1024*1024 45% CPU, 60% GPU
-- 
+- 8295 TPV(100*100*8*6), 7.6% CPU, GPU 60~80.29%. 
 
 ## 原始说明
 

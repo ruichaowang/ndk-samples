@@ -26,6 +26,32 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
+const GLfloat triangleVertices[] = {
+    0.0f,  1.0f,  0.0f,  // 顶点
+    -1.0f, -1.0f, 0.0f,  // 左下角
+    1.0f,  -1.0f, 0.0f   // 右下角
+};
+
+const GLfloat CUBE_VERTICES[] = {
+    // positions
+    -0.5f, -0.5f, -0.5f, 0.5f,  -0.5f, -0.5f, 0.5f,  0.5f,  -0.5f,
+    0.5f,  0.5f,  -0.5f, -0.5f, 0.5f,  -0.5f, -0.5f, -0.5f, -0.5f,
+
+    -0.5f, -0.5f, 0.5f,  0.5f,  -0.5f, 0.5f,  0.5f,  0.5f,  0.5f,
+    0.5f,  0.5f,  0.5f,  -0.5f, 0.5f,  0.5f,  -0.5f, -0.5f, 0.5f,
+
+    -0.5f, 0.5f,  0.5f,  -0.5f, 0.5f,  -0.5f, -0.5f, -0.5f, -0.5f,
+    -0.5f, -0.5f, -0.5f, -0.5f, -0.5f, 0.5f,  -0.5f, 0.5f,  0.5f,
+
+    0.5f,  0.5f,  0.5f,  0.5f,  0.5f,  -0.5f, 0.5f,  -0.5f, -0.5f,
+    0.5f,  -0.5f, -0.5f, 0.5f,  -0.5f, 0.5f,  0.5f,  0.5f,  0.5f,
+
+    -0.5f, -0.5f, -0.5f, 0.5f,  -0.5f, -0.5f, 0.5f,  -0.5f, 0.5f,
+    0.5f,  -0.5f, 0.5f,  -0.5f, -0.5f, 0.5f,  -0.5f, -0.5f, -0.5f,
+
+    -0.5f, 0.5f,  -0.5f, 0.5f,  0.5f,  -0.5f, 0.5f,  0.5f,  0.5f,
+    0.5f,  0.5f,  0.5f,  -0.5f, 0.5f,  0.5f,  -0.5f, 0.5f,  -0.5f};
+
 static const char VERTEX_SHADER_TRIANGLE[] = R"glsl(
 #version 320 es
 precision mediump float;
@@ -324,10 +350,10 @@ void GenCubePosition(const std::string& cordinate_path,
     for (int y = 0; y < height; ++y) {
       for (int x = 0; x < width; ++x) {
         /* 填充地面 */
-//        if (z == 2) {
-//          glm::vec3 temp_positon(x * 1.0f, y * 1.0f, z * 1.0f);
-//          cube_positions.push_back(temp_positon);
-//        }
+        if (z == 2) {
+          glm::vec3 temp_positon(x * 1.0f, y * 1.0f, z * 1.0f);
+          cube_positions.push_back(temp_positon);
+        }
 
         /* 添加边缘和立面 */
         if (y == 0 || y == 99 || x == 0 || x == 99) {
@@ -544,6 +570,9 @@ bool Renderer::initVoxelResources() {
   glEnableVertexAttribArray(0);
   checkGlError("init Voxel vao vbo");
 
+  /* 生成立方体 */
+  GenCubePosition(VOXEL_COORDINATE_PATH, cube_positions_, VOTEX_OFFSET);
+
   glGenBuffers(1, &voxel_instance_vbo_);
   glBindBuffer(GL_ARRAY_BUFFER, voxel_instance_vbo_);
   glBufferData(GL_ARRAY_BUFFER, cube_positions_.size() * sizeof(glm::vec3),
@@ -555,9 +584,6 @@ bool Renderer::initVoxelResources() {
   checkGlError("init voxel_instance_vbo_");
 
   LoadTextures();
-
-  /* 生成立方体 */
-  GenCubePosition(VOXEL_COORDINATE_PATH, cube_positions_, VOTEX_OFFSET);
 
   /* 生成内外参 */
   for (auto i = 0; i < 6; i++) {
@@ -574,7 +600,7 @@ void Renderer::drawVoxels() {
 
   gl_camera_.ProcessMouseMovement(delta_x, delta_y);
 
-  glClearColor(0.8f, 0.1f, 0.1f, 1.0f);
+  glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   checkGlError("clear");
 
@@ -610,7 +636,7 @@ void Renderer::drawVoxels() {
     glBindTexture(GL_TEXTURE_2D, camera_textures[i]);
     glUniformMatrix4fv(glGetUniformLocation(voxel_program_, "extrinsic_matrix"),
                        1, GL_FALSE,
-                       reinterpret_cast<const GLfloat*>(&model_mat_[0][0]));
+                       glm::value_ptr(model_mat_[i]));
     glDrawArraysInstanced(GL_TRIANGLES, 0, 36, cube_positions_.size());
   }
   checkGlError("draw finished");
@@ -772,7 +798,7 @@ void Renderer::drawInstance() {
   glDrawArraysInstanced(GL_TRIANGLES, 0, 36, cube_positions_.size());
 }
 void Renderer::updatingCameraParams() {
-  const auto MouseSensitivity = 0.01;
+  const auto MouseSensitivity = 0.001;
   // 摄像机的方向变量
   float xoffset = -1.0 * delta_x * MouseSensitivity;
   float yoffset = delta_y * MouseSensitivity;
